@@ -1,0 +1,40 @@
+# ─── Fichiers sensibles — NE JAMAIS COMMITER ──────────────────
+.env
+.env.local
+.env.production
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
+
+# ─── Node.js ──────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── Logs ─────────────────────────────────────────────────────
+logs/
+*.log
+
+# ─── Build / dist ─────────────────────────────────────────────
+dist/
+build/
+.vite/
+
+# ─── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── IDE ──────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# ─── Docker volumes locaux ────────────────────────────────────
+postgres-data/
+redis-data/
+grafana-data/
+prometheus-data/

@@ -1,0 +1,212 @@
+[
+  {
+    "id": "overview_001",
+    "category": "overview",
+    "title": "Architecture ERP DATAPROTECT",
+    "content": "La plateforme ERP DATAPROTECT est organisée en architecture microservices avec 22 services répartis sur 4 domaines métiers: IT (Infrastructure & Support), HR (Ressources Humaines), Finance (Comptabilité & Budget), et Operations (Coordination Opérationnelle). Chaque domaine possède son propre schéma PostgreSQL isolé, ses mécanismes de cache Redis, et communique via RabbitMQ pour les événements asynchrones. L'API Gateway centralisée sur le port 3000 gère l'authentification JWT et route les requêtes vers les microservices appropriés."
+  },
+  {
+    "id": "it_helpdesk_001",
+    "category": "it",
+    "title": "Helpdesk Service - Vue d'ensemble",
+    "content": "Le Helpdesk Service (port 3101) centralise la gestion des tickets d'incidents et de demandes utilisateurs. Il implémente un système complet de gestion des tickets avec statuts (open, in_progress, resolved, closed), priorités (low, medium, high, critical), catégories (hardware, software, network, access), et assignation automatique ou manuelle. Le service track les SLA et envoie des alertes automatiques aux managers en cas de dépassement."
+  },
+  {
+    "id": "it_helpdesk_002",
+    "category": "it",
+    "title": "Helpdesk Service - API Endpoints",
+    "content": "Endpoints disponibles: POST /api/helpdesk/tickets (créer ticket - champs requis: title, description, priority, category), GET /api/helpdesk/tickets (lister tickets - filtres: status, priority, assignedTo, category, createdAfter, createdBefore), GET /api/helpdesk/tickets/{id} (détails ticket), PATCH /api/helpdesk/tickets/{id} (modifier ticket - champs: status, priority, assignedTo, resolution), DELETE /api/helpdesk/tickets/{id} (supprimer ticket - admin uniquement), POST /api/helpdesk/tickets/{id}/comments (ajouter commentaire)."
+  },
+  {
+    "id": "it_helpdesk_003",
+    "category": "it",
+    "title": "Helpdesk Service - Modèle de données",
+    "content": "Table tickets: id (PK, auto-increment), ticketNumber (unique, format TKT-YYYY-NNNN), title (varchar 200), description (text), category (enum), priority (enum), status (enum), createdBy (FK users), assignedTo (FK users, nullable), createdAt (timestamp), updatedAt (timestamp), resolvedAt (timestamp nullable), resolution (text nullable), slaDeadline (timestamp calculated based on priority)."
+  },
+  {
+    "id": "it_accounts_001",
+    "category": "it",
+    "title": "User Accounts Service - Gestion des utilisateurs",
+    "content": "Le User Accounts Service (port 3102) gère les profils utilisateurs, les rôles (employee, manager, admin, hr, finance), les permissions par domaine, et l'intégration avec Active Directory. Chaque utilisateur appartient à un département (IT, HR, Finance, Operations) qui détermine ses accès par défaut. Le service génère les tokens JWT lors de l'authentification et maintient la session dans Redis."
+  },
+  {
+    "id": "it_accounts_002",
+    "category": "it",
+    "title": "User Accounts Service - API Endpoints",
+    "content": "Endpoints: POST /api/accounts/users (créer utilisateur - champs: email unique, firstName, lastName, department, role), GET /api/accounts/users (lister utilisateurs - filtres: department, role, status), GET /api/accounts/users/{id} (détails utilisateur), PATCH /api/accounts/users/{id} (modifier - champs: firstName, lastName, department, role, status), POST /api/accounts/users/reset-password (réinitialiser mot de passe), POST /api/accounts/users/{id}/deactivate (désactiver compte)."
+  },
+  {
+    "id": "it_equipment_001",
+    "category": "it",
+    "title": "Equipment Service - Gestion des assets IT",
+    "content": "L'Equipment Service (port 3103) assure le suivi complet des équipements IT: laptops, desktops, moniteurs, téléphones, tablettes. Chaque asset possède un identifiant unique, un numéro de série, une date d'achat, un statut (available, assigned, maintenance, retired), et peut être affecté à un employé. Le service track le lifecycle complet de l'équipement incluant les maintenances, garanties, et amortissements."
+  },
+  {
+    "id": "hr_employees_001",
+    "category": "hr",
+    "title": "Employees Service - Gestion des employés",
+    "content": "L'Employees Service (port 3201) centralise toutes les données des employés: informations personnelles, contrats (CDI, CDD, Stage), départements, positions hiérarchiques, managers, dates d'embauche, salaires (chiffrés), et historique. Le service génère automatiquement un compte utilisateur lors de la création d'un employé et maintient la synchronisation avec le User Accounts Service."
+  },
+  {
+    "id": "hr_employees_002",
+    "category": "hr",
+    "title": "Employees Service - API Endpoints",
+    "content": "Endpoints: POST /api/hr/employees (créer employé - champs: firstName, lastName, email unique, department, position, hireDate, contractType, salary, manager), GET /api/hr/employees (lister - filtres: department, contractType, manager, hireDate), GET /api/hr/employees/{id} (détails avec historique), PATCH /api/hr/employees/{id} (modifier - restrictions selon rôle), GET /api/hr/employees/hierarchy (organigramme complet), POST /api/hr/employees/{id}/terminate (fin de contrat)."
+  },
+  {
+    "id": "hr_leave_001",
+    "category": "hr",
+    "title": "Leave Requests Service - Gestion des congés",
+    "content": "Le Leave Requests Service (port 3202) gère le workflow complet des demandes de congés: soumission par l'employé, validation par le manager, mise à jour automatique des soldes, notifications par email. Types de congés supportés: paid_leave (congés payés), sick_leave (arrêt maladie), unpaid_leave (congé sans solde), parental_leave (congé parental). Le solde annuel se réinitialise automatiquement le 1er janvier."
+  },
+  {
+    "id": "hr_leave_002",
+    "category": "hr",
+    "title": "Leave Requests Service - API Endpoints",
+    "content": "Endpoints: POST /api/hr/leave-requests (créer demande - champs: type, startDate, endDate, reason optionnel - vérifie solde automatiquement), GET /api/hr/leave-requests (lister - filtres: status, type, employee), GET /api/hr/leave-requests/balance (consulter solde personnel: total, utilisé, restant, en attente), POST /api/hr/leave-requests/{id}/approve (manager approuve), POST /api/hr/leave-requests/{id}/reject (manager refuse avec commentaire obligatoire), GET /api/hr/leave-requests/team (manager voit équipe)."
+  },
+  {
+    "id": "hr_payroll_001",
+    "category": "hr",
+    "title": "Payroll Service - Gestion de la paie",
+    "content": "Le Payroll Service (port 3204) gère le processus complet de paie: calcul des salaires de base, primes mensuelles et exceptionnelles, déductions (cotisations sociales, impôts, avances), génération des bulletins de paie PDF, et envoi sécurisé par email. Le service effectue les calculs automatiquement chaque mois et track l'historique complet pour audit et reporting. Intégration avec le système bancaire pour les virements (hors scope actuel)."
+  },
+  {
+    "id": "finance_budget_001",
+    "category": "finance",
+    "title": "Budget Service - Gestion budgétaire",
+    "content": "Le Budget Service (port 3301) permet la création et le suivi des budgets annuels par département et par catégorie (personnel, équipement, logiciels, formation, autres). Chaque budget possède un montant alloué, un montant dépensé (calculé automatiquement depuis les expenses et invoices), et un montant restant. Le système génère des alertes automatiques à 80% et 95% de consommation budgétaire et fournit des prévisions de fin d'année."
+  },
+  {
+    "id": "finance_budget_002",
+    "category": "finance",
+    "title": "Budget Service - API Endpoints",
+    "content": "Endpoints: POST /api/finance/budgets (créer budget - champs: year, department, categories avec allocatedAmount par catégorie), GET /api/finance/budgets (lister - filtres: year, department, status), GET /api/finance/budgets/{id} (détails budget), GET /api/finance/budgets/{id}/status (état exécution: alloué, dépensé, restant, taux %), PATCH /api/finance/budgets/{id} (modifier allocations), GET /api/finance/budgets/forecast (prévisions fin année)."
+  },
+  {
+    "id": "finance_expenses_001",
+    "category": "finance",
+    "title": "Expenses Service - Notes de frais",
+    "content": "L'Expenses Service (port 3304) gère le workflow complet des notes de frais: soumission par l'employé avec reçus scannés (base64), validation par le manager, approbation par Finance, et remboursement. Catégories supportées: transport, repas, hébergement, fournitures, autres. Chaque note de frais est vérifiée contre la politique de frais de l'entreprise (plafonds par catégorie) et contre le budget du département."
+  },
+  {
+    "id": "finance_expenses_002",
+    "category": "finance",
+    "title": "Expenses Service - API Endpoints",
+    "content": "Endpoints: POST /api/finance/expenses (soumettre note - champs: date, category, amount, description, attachments array base64), GET /api/finance/expenses (lister - filtres: status, employee, dateFrom, dateTo), GET /api/finance/expenses/{id} (détails avec pièces jointes), POST /api/finance/expenses/{id}/approve (manager valide), POST /api/finance/expenses/{id}/reject (manager refuse avec commentaire), POST /api/finance/expenses/{id}/pay (Finance marque comme payé)."
+  },
+  {
+    "id": "finance_invoices_001",
+    "category": "finance",
+    "title": "Invoices Service - Facturation clients",
+    "content": "L'Invoices Service (port 3305) gère la facturation clients: création de factures avec lignes d'articles (description, quantité, prix unitaire, TVA), génération automatique de PDF, envoi par email, suivi des paiements, et relances automatiques. Chaque facture possède un numéro unique (format INV-YYYY-NNNNN), une date d'émission, une date d'échéance, et un statut (draft, sent, paid, overdue, cancelled)."
+  },
+  {
+    "id": "finance_invoices_002",
+    "category": "finance",
+    "title": "Invoices Service - API Endpoints",
+    "content": "Endpoints: POST /api/finance/invoices (créer facture - champs: clientId, invoiceDate, dueDate, lineItems array, paymentTerms), GET /api/finance/invoices (lister - filtres: status, client, dateFrom, dateTo), GET /api/finance/invoices/{id} (détails), GET /api/finance/invoices/{id}/pdf (télécharger PDF), POST /api/finance/invoices/{id}/send (envoyer email client), POST /api/finance/invoices/{id}/mark-paid (marquer payée avec date et référence), POST /api/finance/invoices/{id}/cancel (annuler)."
+  },
+  {
+    "id": "ops_tasks_001",
+    "category": "operations",
+    "title": "Tasks Service - Gestion des tâches",
+    "content": "Le Tasks Service (port 3401) permet la création et le suivi de tâches individuelles: titre, description, assignation à un utilisateur, date d'échéance, priorité, tags, et optionnellement liaison à un projet. Le système envoie des notifications automatiques à l'assigné lors de la création, et des rappels à J-3 et J-1 de l'échéance. Chaque tâche peut être commentée et son temps de travail peut être tracké (timetracking)."
+  },
+  {
+    "id": "ops_tasks_002",
+    "category": "operations",
+    "title": "Tasks Service - API Endpoints",
+    "content": "Endpoints: POST /api/operations/tasks (créer tâche - champs: title, description, assignedTo, dueDate, priority, project optionnel, tags array), GET /api/operations/tasks (lister - filtres: assignedTo, status, priority, project, dueDate), GET /api/operations/tasks/{id} (détails avec commentaires), PATCH /api/operations/tasks/{id} (modifier), POST /api/operations/tasks/{id}/complete (marquer terminée avec timeSpent en minutes), POST /api/operations/tasks/{id}/comments (ajouter commentaire)."
+  },
+  {
+    "id": "ops_projects_001",
+    "category": "operations",
+    "title": "Projects Service - Pilotage projets",
+    "content": "Le Projects Service (port 3404) permet de créer et piloter des projets: nom, description, dates de début/fin, budget alloué, équipe (manager + membres), milestones, et board Kanban pour les tâches. Le service génère automatiquement un budget tracking qui consomme depuis le budget Operations du département. Chaque projet peut avoir des risques identifiés et une santé globale (green/yellow/red) calculée automatiquement selon l'avancement et le budget."
+  },
+  {
+    "id": "ops_projects_002",
+    "category": "operations",
+    "title": "Projects Service - API Endpoints",
+    "content": "Endpoints: POST /api/operations/projects (créer projet - champs: name, description, startDate, endDate, budget, manager, team array userIds, milestones array), GET /api/operations/projects (lister - filtres: status, manager, dateFrom), GET /api/operations/projects/{id} (détails complets), GET /api/operations/projects/{id}/progress (avancement: tâches total/complétées, budget consommé/restant, milestones, santé), PATCH /api/operations/projects/{id} (modifier), POST /api/operations/projects/{id}/risks (ajouter risque)."
+  },
+  {
+    "id": "ops_suppliers_001",
+    "category": "operations",
+    "title": "Suppliers Service - Gestion fournisseurs",
+    "content": "Le Suppliers Service (port 3403) centralise la base fournisseurs: informations de contact (nom, email, téléphone, adresse), catégorie (IT, office, services, other), conditions de paiement, numéro d'identification fiscale, contrats actifs, et historique des commandes. Chaque fournisseur peut être évalué (rating, qualité livraison, communication) et ces évaluations sont utilisées pour les renouvellements de contrats."
+  },
+  {
+    "id": "ops_suppliers_002",
+    "category": "operations",
+    "title": "Suppliers Service - API Endpoints",
+    "content": "Endpoints: POST /api/operations/suppliers (créer fournisseur - champs: name, category, contactEmail, contactPhone, address, paymentTerms, taxId), GET /api/operations/suppliers (lister - filtres: category, active), GET /api/operations/suppliers/{id} (détails avec historique commandes), PATCH /api/operations/suppliers/{id} (modifier), POST /api/operations/suppliers/{id}/evaluate (évaluer - rating 1-5, deliveryTime 1-5, quality 1-5, communication 1-5, comments), POST /api/operations/suppliers/{id}/deactivate."
+  },
+  {
+    "id": "auth_001",
+    "category": "authentication",
+    "title": "Authentification JWT - Flux complet",
+    "content": "L'authentification utilise un système de double token JWT: access token (durée 15 minutes, contient userId, role, department) et refresh token (durée 7 jours, stocké dans Redis pour révocation). Flux: 1) POST /login avec email/password, 2) vérification bcrypt, 3) génération des 2 tokens, 4) stockage refresh token dans Redis, 5) retour des tokens au client. Pour les requêtes suivantes, le client inclut l'access token dans l'en-tête Authorization: Bearer {token}. Si l'access token expire, le client utilise le refresh token pour obtenir une nouvelle paire sans re-saisir les credentials."
+  },
+  {
+    "id": "auth_002",
+    "category": "authentication",
+    "title": "Modèle RBAC - Rôles et permissions",
+    "content": "5 rôles disponibles: Admin (accès lecture/écriture tous domaines), Manager (lecture/écriture son domaine, lecture autres), Employee (lecture seul, self uniquement pour HR/Finance), HR (accès complet domaine HR), Finance (accès complet domaine Finance). Les permissions sont vérifiées par un middleware qui extrait le rôle depuis les claims JWT et vérifie l'accès à la ressource demandée. Permissions granulaires: self (ses propres données), team (son équipe), department (son département), global (tout le système)."
+  },
+  {
+    "id": "infra_001",
+    "category": "infrastructure",
+    "title": "PostgreSQL - Organisation des schémas",
+    "content": "PostgreSQL 15 avec 4 schémas isolés par domaine: schema IT (tables: tickets, user_accounts, equipment, monitoring_alerts, licenses), schema HR (tables: employees, leave_requests, recruitment, payroll, performance_reviews), schema Finance (tables: budgets, expenses, invoices, payments, reports), schema Operations (tables: tasks, workflows, suppliers, projects, inventory). Chaque schéma possède ses propres indexes, contraintes FK internes, et stratégies de backup. Connexion via pool de connexions (pg-pool) pour performance."
+  },
+  {
+    "id": "infra_002",
+    "category": "infrastructure",
+    "title": "Redis - Usages et patterns",
+    "content": "Redis 7 utilisé pour: 1) Cache des requêtes fréquentes (profils utilisateurs, configurations) avec TTL 15 minutes, pattern cache-aside, 2) Sessions utilisateurs avec TTL aligné sur refresh token (7 jours), 3) Refresh tokens JWT pour révocation, 4) Rate limiting avec compteurs INCR et EXPIRE, 5) Contexte conversationnel du chatbot avec historique 10 derniers messages, 6) Pub/Sub pour notifications temps réel entre services. Structure clés: cache:{type}:{id}, session:{userId}, token:{refreshToken}, ratelimit:{userId}:{endpoint}, chat:context:{conversationId}."
+  },
+  {
+    "id": "infra_003",
+    "category": "infrastructure",
+    "title": "RabbitMQ - Événements asynchrones",
+    "content": "RabbitMQ 3 avec AMQP 0.9.1 pour communication asynchrone. Exchanges par domaine: exchange.it, exchange.hr, exchange.finance, exchange.operations. Routing keys format: {domain}.{service}.{event} (ex: hr.employees.created, finance.invoice.paid). Work queues pour distribution de charge, Dead Letter Exchange pour messages en échec après 3 retry avec exponential backoff. Événements publiés: employee.created, leave.approved, ticket.created, invoice.paid, project.milestone, task.assigned. Consumers dans chaque service intéressé."
+  },
+  {
+    "id": "api_001",
+    "category": "api",
+    "title": "API Gateway - Routage et sécurité",
+    "content": "API Gateway Express.js sur port 3000 agit comme point d'entrée unique. Middleware chain: 1) CORS avec whitelist, 2) Helmet pour headers sécurité, 3) Rate limiting (100 req/min par IP, 500 req/min par user authentifié), 4) JWT validation (sauf /login et /health), 5) Extraction claims JWT, 6) Routage vers microservice via HTTP proxy. Routes: /api/helpdesk/* → :3101, /api/accounts/* → :3102, /api/hr/* → :3201-3205, /api/finance/* → :3301-3305, /api/operations/* → :3401-3405, /api/chatbot/* → :3500."
+  },
+  {
+    "id": "chatbot_001",
+    "category": "chatbot",
+    "title": "Chatbot Service - Architecture",
+    "content": "Le Chatbot Service (port 3500) orchestre les interactions en langage naturel. Flux: 1) Reçoit query utilisateur, 2) Recherche RAG dans ChromaDB (top 3 docs similaires), 3) Récupère historique conversation dans Redis, 4) Construit contexte = docs RAG + historique + query, 5) Envoie à Ollama (modèle fine-tuné Mistral 7B), 6) Parse réponse pour détecter function calling, 7) Si action métier: appelle microservice via API Gateway avec JWT user, 8) Reformule réponse en NLP, 9) Sauvegarde dans historique Redis, 10) Retourne au user."
+  },
+  {
+    "id": "chatbot_002",
+    "category": "chatbot",
+    "title": "Chatbot - Function Calling",
+    "content": "Le modèle fine-tuné peut générer des function calls au format JSON: {\"function\": \"create_ticket\", \"parameters\": {\"title\": \"...\", \"priority\": \"high\"}}. Functions disponibles: create_ticket, get_tickets, get_leave_balance, submit_leave_request, submit_expense, get_budget_status, create_task, get_project_progress, list_suppliers. Le service parse le JSON, valide les paramètres, construit la requête HTTP vers le microservice approprié, et inclut le JWT de l'utilisateur pour authentification."
+  },
+  {
+    "id": "devops_001",
+    "category": "devops",
+    "title": "Pipeline CI/CD - Phases",
+    "content": "Pipeline GitHub Actions en 9 phases: 1) Code Analysis (ESLint Security, npm audit, npm ci), 2) Build & SAST (SonarQube, Snyk SCA, blocage si critique), 3) Tests (Jest coverage ≥70%), 4) Docker Build (multi-stage, Hadolint, push ghcr.io), 5) Security Scan (Trivy, Docker Scout, Vault, blocage si critique), 6) Staging Deploy (docker-compose, Newman API tests), 7) DAST (OWASP ZAP, blocage si failles), 8) Production (approval manuel, rolling deployment), 9) Monitoring (Prometheus, Grafana, ELK). 3 points de blocage empêchent déploiement si vulnérabilités critiques."
+  },
+  {
+    "id": "docker_001",
+    "category": "docker",
+    "title": "Docker Compose - Services",
+    "content": "docker-compose.yml définit 27 containers: 1 API Gateway, 1 Auth Service, 5 services IT, 5 services HR, 5 services Finance, 5 services Operations, 1 Chatbot, 1 PostgreSQL, 1 Redis, 1 RabbitMQ, 1 Ollama, 1 ChromaDB, 1 Prometheus, 1 Grafana, 1 Elasticsearch. Réseau Docker isolé permet communication inter-services par nom de service. Volumes persistants pour PostgreSQL data, Redis data, Ollama models, ChromaDB vectors. Health checks configurés pour chaque service. Environment variables dans .env pour configuration (ports, credentials, secrets)."
+  },
+  {
+    "id": "monitoring_001",
+    "category": "monitoring",
+    "title": "Prometheus & Grafana - Métriques",
+    "content": "Prometheus scrape les métriques de tous les microservices toutes les 15 secondes. Métriques exposées: http_requests_total (counter), http_request_duration_seconds (histogram), database_connections_active (gauge), cache_hit_rate (gauge), queue_messages_pending (gauge), llm_inference_duration_seconds (histogram). Grafana dashboards: 1) Vue d'ensemble système (CPU, RAM, réseau), 2) Performance API (latence, throughput, erreurs), 3) Base de données (connexions, queries/sec, cache hit rate), 4) Chatbot (inférences/min, latence, function calls), 5) Business metrics (tickets créés/jour, congés approuvés, factures payées)."
+  }
+]

@@ -1,0 +1,67 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # API Gateway
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:3000']
+
+  # Auth Service
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:3001']
+
+  # IT Services
+  - job_name: 'it-services'
+    static_configs:
+      - targets:
+        - 'it-helpdesk:3101'
+        - 'it-accounts:3102'
+        - 'it-equipment:3103'
+        - 'it-monitoring:3104'
+        - 'it-licenses:3105'
+
+  # HR Services
+  - job_name: 'hr-services'
+    static_configs:
+      - targets:
+        - 'hr-employees:3201'
+        - 'hr-leave:3202'
+        - 'hr-recruitment:3203'
+        - 'hr-payroll:3204'
+        - 'hr-performance:3205'
+
+  # Finance Services
+  - job_name: 'finance-services'
+    static_configs:
+      - targets:
+        - 'finance-budget:3301'
+        - 'finance-reports:3302'
+        - 'finance-payments:3303'
+        - 'finance-expenses:3304'
+        - 'finance-invoices:3305'
+
+  # Operations Services
+  - job_name: 'operations-services'
+    static_configs:
+      - targets:
+        - 'ops-tasks:3401'
+        - 'ops-workflows:3402'
+        - 'ops-suppliers:3403'
+        - 'ops-projects:3404'
+        - 'ops-inventory:3405'
+
+  # Infrastructure
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['rabbitmq:15672']
