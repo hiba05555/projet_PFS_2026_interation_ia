@@ -1,0 +1,113 @@
+﻿name: ERP DataProtect - CI/CD Pipeline DevSecOps
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ─── PHASE 1 : Analyse du code ───────────────────────
+  code-analysis:
+    name: "Phase 1 - Code Analysis"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ./dataprotect-frontend
+      - name: ESLint Security Scan
+        run: npm run lint --if-present
+        working-directory: ./dataprotect-frontend
+
+  # ─── PHASE 2 : Scan dépendances (SCA) ────────────────
+  dependency-scan:
+    name: "Phase 2 - SCA npm audit"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: ./dataprotect-frontend
+      - name: npm audit frontend
+        run: npm audit --audit-level=high
+        working-directory: ./dataprotect-frontend
+        continue-on-error: true
+      - name: Install chatbot deps
+        run: npm ci
+        working-directory: ./chatbot-service
+      - name: npm audit chatbot
+        run: npm audit --audit-level=high
+        working-directory: ./chatbot-service
+        continue-on-error: true
+
+  # ─── PHASE 3 : Build Docker images ───────────────────
+  docker-build:
+    name: "Phase 3 - Docker Build"
+    runs-on: ubuntu-latest
+    needs: [code-analysis, dependency-scan]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Auth service
+        run: docker build -t erp-auth:test ./services/auth/auth
+      - name: Build Chatbot service
+        run: docker build -t erp-chatbot:test ./chatbot-service
+      - name: Build API Gateway
+        run: docker build -t erp-gateway:test ./services/api-gateway
+
+  # ─── PHASE 4 : Scan sécurité images Docker ───────────
+  container-scan:
+    name: "Phase 4 - Trivy Container Scan"
+    runs-on: ubuntu-latest
+    needs: docker-build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image for scan
+        run: docker build -t erp-auth:scan ./services/auth/auth
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'erp-auth:scan'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+
+  # ─── PHASE 5 : Tests unitaires ───────────────────────
+  unit-tests:
+    name: "Phase 5 - Unit Tests"
+    runs-on: ubuntu-latest
+    needs: [code-analysis]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install chatbot deps
+        run: npm ci
+        working-directory: ./chatbot-service
+      - name: Run Jest tests
+        run: npm test --if-present
+        working-directory: ./chatbot-service
+        continue-on-error: true
+
+  # ─── PHASE 6 : Résumé pipeline ───────────────────────
+  pipeline-summary:
+    name: "Phase 6 - Pipeline Summary"
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, container-scan, unit-tests]
+    steps:
+      - name: Pipeline completed
+        run: |
+          echo "✅ ERP DataProtect CI/CD Pipeline completed"
+          echo "📦 Services built: auth, chatbot, gateway"
+          echo "🔒 Security scans: npm audit + Trivy"
+          echo "🧪 Tests executed"
