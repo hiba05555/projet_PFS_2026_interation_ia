@@ -22,7 +22,7 @@ const userSchema = z.object({
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/,
     'Mot de passe trop faible (min 8 chars, majuscule, chiffre, caractère spécial)'
   ),
-  role:       z.enum(['admin','it','hr','finance','operations','employee']).default('employee'),
+  role:       z.enum(['admin','manager','employee']).default('employee'),
   department: z.string().min(2).max(100),
 });
 

@@ -34,7 +34,7 @@ const expenseSchema = z.object({
 
 app.get('/health', (_req, res) => res.json({ service: 'finance-expenses', status: 'healthy', port: PORT }));
 
-app.get('/', verifyToken, requireDeptOrAdmin('Finance'),
+app.get('/', verifyToken,
   asyncHandler(async (req, res) => {
     const { page, limit, offset } = getPagination(req.query);
     const { category, status } = req.query;
@@ -43,12 +43,14 @@ app.get('/', verifyToken, requireDeptOrAdmin('Finance'),
     if (category) { params.push(category); conds.push(`category = $${params.length}`); }
     if (status)   { params.push(status);   conds.push(`status = $${params.length}`); }
 
-    // ── RBAC data scoping ────────────────────────────────────────────────────
-    // admin / manager Finance → accès total (toutes les dépenses)
-    // employee Finance        → uniquement les dépenses qu'il a créées
-    rbacScope(req.user, conds, params, {
-      employeeFilter: { sql: 'created_by = {N}' },
-    });
+    // ── RBAC self-service ────────────────────────────────────────────────────
+    // admin             → accès total
+    // département Finance (tout rôle) → accès total (gestion des dépenses)
+    // tous les autres   → uniquement leurs propres dépenses (created_by)
+    if (req.user.role !== 'admin' && req.user.department !== 'Finance') {
+      params.push(req.user.id);
+      conds.push(`created_by = $${params.length}`);
+    }
 
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
     params.push(limit, offset);
@@ -69,7 +71,7 @@ app.get('/:id', verifyToken, requireDeptOrAdmin('Finance'),
   })
 );
 
-app.post('/', verifyToken, requireDeptOrAdmin('Finance'),
+app.post('/', verifyToken,
   asyncHandler(async (req, res) => {
     const data = expenseSchema.parse(req.body);
     const r = await pool.query(

@@ -17,6 +17,7 @@ require('dotenv').config();
 
 const ragClient = require('./rag');
 const ollamaClient = require('./ollama');
+const dbClient = require('./db');
 const contextManager = require('./context');
 const functionHandler = require('./functions');
 
@@ -119,22 +120,8 @@ app.post('/chat', async (req, res) => {
       .join('\n');
 
     // Contexte final pour le LLM
-    const fullContext = `
-Documentation ERP pertinente:
-${docsContext}
+const fullContext = `${historyContext ? `Historique de la conversation:\n${historyContext}\n\n` : ''}Documentation ERP pertinente:\n${docsContext}\n\nQuestion: ${query}`;
 
-Historique de la conversation:
-${historyContext}
-
-Question actuelle: ${query}
-
-Instructions IMPORTANTES:
-- Tu dois REFORMULER avec tes propres mots, ne JAMAIS recopier le texte de la documentation tel quel
-- Reponds en 2 a 4 phrases maximum, de maniere naturelle et conversationnelle
-- Utilise la documentation comme source d'information, pas comme texte a copier-coller
-- Si une action metier est demandee, genere un function call au format JSON
-- Si tu ne sais pas, dis-le honnetement
-`.trim();
 
     // ========== ÉTAPE 4: INFÉRENCE LLM ==========
     logger.info('Step 4: LLM inference...');
@@ -180,16 +167,21 @@ Ne mentionne pas les détails techniques JSON.
 
     // ========== ÉTAPE 7: SAUVEGARDE CONTEXTE ==========
     logger.info('Step 7: Saving context...');
-    await contextManager.saveMessage(
-      conversationId || userId,
-      'user',
-      query
-    );
-    await contextManager.saveMessage(
-      conversationId || userId,
-      'assistant',
-      finalResponse
-    );
+
+    // Redis - contexte temporaire pour le LLM
+    await contextManager.saveMessage(conversationId || userId, 'user', query);
+    await contextManager.saveMessage(conversationId || userId, 'assistant', finalResponse);
+
+    // PostgreSQL - historique permanent
+    try {
+      const dbConvId = await dbClient.getOrCreateConversation(userId, conversationId || userId);
+      if (dbConvId) {
+        await dbClient.saveMessage(dbConvId, 'user', query);
+        await dbClient.saveMessage(dbConvId, 'assistant', finalResponse);
+      }
+    } catch (dbError) {
+      logger.error(`DB save error: ${dbError.message}`);
+    }
 
     // ========== RÉPONSE FINALE ==========
     logger.info('Sending response to user');
@@ -241,6 +233,26 @@ app.post('/reset', async (req, res) => {
       error: 'Failed to reset conversation',
       message: error.message
     });
+  }
+});
+
+// GET /history/:userId
+app.get('/history/:userId', async (req, res) => {
+  try {
+    const conversations = await dbClient.getUserConversations(req.params.userId);
+    res.json({ conversations });
+  } catch (error) {
+    res.status(500).json({ conversations: [] });
+  }
+});
+
+// GET /history/:userId/:convId
+app.get('/history/:userId/:convId', async (req, res) => {
+  try {
+    const messages = await dbClient.getConversationMessages(req.params.convId);
+    res.json({ messages });
+  } catch (error) {
+    res.status(500).json({ messages: [] });
   }
 });
 

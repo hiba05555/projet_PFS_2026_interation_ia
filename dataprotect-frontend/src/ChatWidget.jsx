@@ -6,7 +6,9 @@ export default function ChatWidget() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [conversationId, setConversationId] = useState(null);
+  const userStr = localStorage.getItem('user');
+  const userId = userStr ? JSON.parse(userStr).id : 'anonymous';
+  const [conversationId, setConversationId] = useState(`conv_${userId}`);
   const messagesEndRef = useRef(null);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
   const sendMessage = async () => {

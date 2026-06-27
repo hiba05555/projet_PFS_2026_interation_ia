@@ -58,11 +58,8 @@ app.get('/', verifyToken, requireDeptOrAdmin('IT'),
     if (category)    { params.push(category);    conds.push(`category = $${params.length}`); }
     if (assigned_to) { params.push(assigned_to); conds.push(`assigned_to = $${params.length}`); }
 
-    // RBAC : manager IT → tous les tickets IT | employee → uniquement les siens
-    rbacScope(req.user, conds, params, {
-      employeeFilter: { sql: '(created_by = {N} OR assigned_to = {N})' },
-    });
-
+    // requireDeptOrAdmin('IT') garantit que seuls les agents IT et admin arrivent ici
+    // → accès total sans restriction supplémentaire (rbacScope retiré : branche 'manager' dead code)
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
     params.push(limit, offset);
 

@@ -1,0 +1,35 @@
+# Modelfile — erp-dataprotect
+# ============================
+# Modele Mistral 7B Instruct v0.3 (Q4_K_M) fine-tune pour ERP DataProtect
+#
+# Usage (apres docker cp du .gguf dans le conteneur) :
+#   docker exec erp-ollama ollama create erp-dataprotect -f /tmp/Modelfile
+#
+# Le FROM pointe vers le chemin du .gguf DANS le conteneur erp-ollama.
+# Ce chemin est defini par le setup script qui execute docker cp avant ollama create.
+
+FROM /tmp/mistral-7b-instruct-v0.3.Q4_K_M.gguf
+
+# Template au format d'instruction Mistral Instruct v0.1/v0.2/v0.3
+# Utilise avec /api/generate (prompt direct), pas /api/chat
+TEMPLATE """[INST] {{ .Prompt }} [/INST]"""
+
+# Parametres coherents avec ollama.js (temperature, top_p, top_k, repeat_penalty)
+PARAMETER temperature 0.7
+PARAMETER top_p 0.95
+PARAMETER top_k 40
+PARAMETER repeat_penalty 1.1
+
+# Fenetre de contexte : 2048 tokens — reduit l'empreinte memoire (16 GB RAM)
+PARAMETER num_ctx 2048
+
+# Tokens d'arret pour eviter les hallucinations de tour suivant
+PARAMETER stop "[INST]"
+PARAMETER stop "[/INST]"
+PARAMETER stop "</s>"
+
+# Description du modele
+SYSTEM """Tu es l'assistant IA de l'ERP DataProtect. Tu reponds aux questions des employes
+concernant les modules RH, Finance, IT et Operations de l'entreprise.
+Tu bases tes reponses sur la documentation officielle de l'ERP qui t'est fournie dans le contexte.
+Si une information n'est pas dans le contexte fourni, indique-le clairement."""

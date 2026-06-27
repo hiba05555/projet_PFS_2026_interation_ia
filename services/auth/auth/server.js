@@ -102,7 +102,7 @@ const registerSchema = z.object({
   username:   z.string().min(3).max(50),
   email:      z.string().email(),
   password:   z.string().min(8),
-  role:       z.enum(['admin','it','hr','finance','operations','employee']).default('employee'),
+  role:       z.enum(['admin','manager','employee']).default('employee'),
   department: z.string().min(2).max(100),
 });
 
@@ -341,7 +341,7 @@ app.post('/admin/create', asyncHandler(async (req, res) => {
   const schema = z.object({
     username:   z.string().min(3).max(50),
     email:      z.string().email(),
-    role:       z.enum(['admin','it','hr','finance','operations','employee']).default('employee'),
+    role:       z.enum(['admin','manager','employee']).default('employee'),
     department: z.string().min(2).max(100),
     job_title:  z.string().max(100).optional(),
   });

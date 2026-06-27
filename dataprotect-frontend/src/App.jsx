@@ -589,6 +589,7 @@ const MENU = {
     { id:"home", label:"Accueil", icon:"home" },
     { id:"tickets", label:"Mes tickets", icon:"help-circle", badge:2 },
     { id:"leave", label:"Congés", icon:"calendar" },
+    { id:"expenses", label:"Mes dépenses", icon:"dollar" },
     { id:"profile", label:"Mon profil", icon:"user" },
   ],
 };
@@ -605,6 +606,7 @@ const getManagerMenu = (user) => {
     ...moduleItem,
     { id:"tickets", label:"Mes tickets", icon:"help-circle", badge:2 },
     { id:"leave", label:"Congés", icon:"calendar" },
+    ...(moduleId !== "finance" ? [{ id:"expenses", label:"Mes dépenses", icon:"dollar" }] : []),
     { id:"profile", label:"Mon profil", icon:"user" },
   ];
 };
@@ -646,6 +648,19 @@ function Sidebar({ user, active, setActive, onLogout, collapsed, setCollapsed })
           </div>
         ))}
       </nav>
+      
+      {/* Historique Chat */}
+      <div style={{ padding:"8px 0" }}>
+        <div onClick={() => setActive('chat-history')}
+          title={collapsed ? "Historique Chat" : ""}
+          style={{ display:"flex", alignItems:"center", gap:collapsed?0:10, padding:collapsed?"10px 0":"10px 18px", justifyContent:collapsed?"center":"flex-start", fontSize:12, color:active==='chat-history'?"#fff":"rgba(255,255,255,0.45)", background:active==='chat-history'?"rgba(204,0,0,0.15)":"transparent", borderLeft:`3px solid ${active==='chat-history'?T.red:"transparent"}`, cursor:"pointer", transition:"all .15s" }}
+          onMouseEnter={e=>{e.currentTarget.style.background="rgba(204,0,0,0.1)";}}
+          onMouseLeave={e=>{e.currentTarget.style.background=active==='chat-history'?"rgba(204,0,0,0.15)":"transparent";}}>
+          <span style={{ fontSize:15 }}>💬</span>
+          {!collapsed && <span>Historique Chat</span>}
+        </div>
+      </div>
+
 
       <div style={{ padding:"14px", borderTop:"1px solid rgba(255,255,255,0.05)" }}>
         {!collapsed && (
@@ -722,12 +737,32 @@ function ModulePage({ children }) {
 }
 
 // ─── ADMIN DASHBOARD ─────────────────────────────────────────────────────────
-function AdminDashboard({ user }) {
+function AdminDashboard({ user, token }) {
+  const [kpi, setKpi] = useState({ employees:0, tickets:0, budgetK:0, projects:0 });
+
+  useEffect(() => {
+    if (!token) return;
+    const h = { Authorization: `Bearer ${token}` };
+    Promise.allSettled([
+      fetch("/api/hr/employees?status=active&limit=1", { headers:h }).then(r=>r.json()),
+      fetch("/api/it/helpdesk?status=open&limit=1",    { headers:h }).then(r=>r.json()),
+      fetch("/api/finance/reports/dashboard",          { headers:h }).then(r=>r.json()),
+      fetch("/api/ops/projects/stats",                 { headers:h }).then(r=>r.json()),
+    ]).then(([hr, it, fin, ops]) => {
+      setKpi({
+        employees: hr.status==="fulfilled"  && hr.value?.success  ? (hr.value.pagination?.total  ?? 0) : 0,
+        tickets:   it.status==="fulfilled"  && it.value?.success  ? (it.value.pagination?.total  ?? 0) : 0,
+        budgetK:   fin.status==="fulfilled" && fin.value?.success ? Math.round(parseFloat(fin.value.data?.active_budgets?.total||0)/1000) : 0,
+        projects:  ops.status==="fulfilled" && ops.value?.success ? parseInt(ops.value.data?.active||0) : 0,
+      });
+    });
+  }, [token]);
+
   const stats = [
-    { label:"Employés actifs", value:247, trend:"+8%", trendUp:true, icon:"users", color:T.teal, delay:0 },
-    { label:"Tickets ouverts", value:18, trend:"+3", trendUp:false, icon:"help-circle", color:T.red, delay:.1 },
-    { label:"Budget restant (k MAD)", value:342, trend:"-2%", trendUp:false, icon:"dollar", color:T.warning, delay:.2 },
-    { label:"Projets actifs", value:12, trend:"+12%", trendUp:true, icon:"box", color:T.success, delay:.3 },
+    { label:"Employés actifs",      value: kpi.employees, trend:"", trendUp:true,  icon:"users",        color:T.teal,    delay:0   },
+    { label:"Tickets ouverts",      value: kpi.tickets,   trend:"", trendUp:false, icon:"help-circle",  color:T.red,     delay:.1  },
+    { label:"Budget actif (k MAD)", value: kpi.budgetK,   trend:"", trendUp:true,  icon:"dollar",       color:T.warning, delay:.2  },
+    { label:"Projets actifs",       value: kpi.projects,  trend:"", trendUp:true,  icon:"box",          color:T.success, delay:.3  },
   ];
   const barData = [
     {l:"HR",v:75,c:T.teal},{l:"Finance",v:55,c:T.red},{l:"IT",v:88,c:T.sage},{l:"Ops",v:62,c:T.warning},{l:"Admin",v:40,c:"#888"}
@@ -800,27 +835,53 @@ function AdminDashboard({ user }) {
 }
 
 // ─── HR MODULE ───────────────────────────────────────────────────────────────
-function HRModule({ token }) {
+function HRModule({ token, user }) {
+  const isHRAdmin = user?.department === "HR" || user?.role === "admin";
+
   const [employees, setEmployees] = useState([]);
+  const [pendingLeaves, setPendingLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ first_name:"", last_name:"", email:"", department:"", position:"", hire_date:"" });
+  const [leaveTab, setLeaveTab] = useState(false);
 
-  useEffect(()=>{ fetchEmployees(); }, []);
+  useEffect(()=>{ fetchAll(); }, []);
 
-  const fetchEmployees = async () => {
+  const fetchAll = async () => {
     setLoading(true);
     try {
-      const r = await fetch("http://localhost/api/hr/employees", { headers:{ Authorization:`Bearer ${token}` } });
-      const d = await r.json();
-      setEmployees(d.data || []);
+      const h = { Authorization:`Bearer ${token}` };
+      const [empR, lvR] = await Promise.all([
+        fetch("/api/hr/employees", { headers:h }),
+        fetch("/api/hr/leave?status=pending&limit=20", { headers:h }),
+      ]);
+      const [empD, lvD] = await Promise.all([empR.json(), lvR.json()]);
+      setEmployees(empD.data || []);
+      setPendingLeaves(lvD.data || []);
     } catch {}
     setLoading(false);
   };
 
+  const fetchEmployees = async () => {
+    try {
+      const r = await fetch("/api/hr/employees", { headers:{ Authorization:`Bearer ${token}` } });
+      const d = await r.json();
+      setEmployees(d.data || []);
+    } catch {}
+  };
+
+  const handleLeave = async (id, action) => {
+    try {
+      await fetch(`/api/hr/leave/${id}/${action}`, {
+        method:"PATCH", headers:{ Authorization:`Bearer ${token}` }
+      });
+      setPendingLeaves(prev => prev.filter(l => l.leave_id !== id));
+    } catch {}
+  };
+
   const createEmployee = async () => {
     if (!form.first_name || !form.email || !form.hire_date) return;
-    await fetch("http://localhost/api/hr/employees", {
+    await fetch("/api/hr/employees", {
       method:"POST", headers:{ "Content-Type":"application/json", Authorization:`Bearer ${token}` },
       body: JSON.stringify(form)
     });
@@ -832,14 +893,23 @@ function HRModule({ token }) {
 
   return (
     <ModulePage>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
         <div>
           <div style={{ fontSize:18, fontWeight:500, color:"#fff", fontFamily:"'Rajdhani',sans-serif" }}>Ressources Humaines</div>
-          <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>{employees.length} employé(s) enregistré(s)</div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>{employees.length} employé(s) · {pendingLeaves.length} congé(s) en attente</div>
         </div>
-        <StardustButton onClick={()=>setShowForm(!showForm)} style={{ padding:"9px 16px", fontSize:12, display:"flex", alignItems:"center", gap:6 }}>
-          <Icon name="plus" size={14} color="#fff" /> Nouvel employé
-        </StardustButton>
+        <div style={{ display:"flex", gap:8 }}>
+          {isHRAdmin && pendingLeaves.length > 0 && (
+            <button onClick={()=>setLeaveTab(!leaveTab)} style={{ padding:"9px 14px", background:leaveTab?"rgba(186,117,23,0.15)":"rgba(255,255,255,0.05)", color:leaveTab?T.warning:"rgba(255,255,255,0.5)", border:`1px solid ${leaveTab?"rgba(186,117,23,0.4)":"rgba(255,255,255,0.08)"}`, borderRadius:8, fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
+              <Icon name="calendar" size={13} color={leaveTab?T.warning:"rgba(255,255,255,0.5)"} />
+              Congés en attente
+              <span style={{ background:"rgba(186,117,23,0.25)", color:T.warning, borderRadius:20, padding:"1px 6px", fontSize:10, fontWeight:600 }}>{pendingLeaves.length}</span>
+            </button>
+          )}
+          <StardustButton onClick={()=>setShowForm(!showForm)} style={{ padding:"9px 16px", fontSize:12, display:"flex", alignItems:"center", gap:6 }}>
+            <Icon name="plus" size={14} color="#fff" /> Nouvel employé
+          </StardustButton>
+        </div>
       </div>
 
       {showForm && (
@@ -857,6 +927,29 @@ function HRModule({ token }) {
             <StardustButton onClick={createEmployee} style={{ padding:"9px 20px", fontSize:12 }}>Créer</StardustButton>
             <button onClick={()=>setShowForm(false)} style={{ padding:"9px 20px", background:"rgba(255,255,255,0.05)", color:"rgba(255,255,255,0.5)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:8, fontSize:12, cursor:"pointer" }}>Annuler</button>
           </div>
+        </CursorCard>
+      )}
+
+      {isHRAdmin && leaveTab && pendingLeaves.length > 0 && (
+        <CursorCard style={{ marginBottom:16, overflow:"hidden", animation:"fadeIn .3s ease" }}>
+          <div style={{ padding:"12px 18px", borderBottom:"1px solid rgba(255,255,255,0.05)", fontSize:12, fontWeight:500, color:T.warning, fontFamily:"'Rajdhani',sans-serif" }}>
+            Demandes de congés en attente — approbation requise
+          </div>
+          {pendingLeaves.map((l,i)=>(
+            <div key={l.leave_id||i} style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr auto", padding:"12px 18px", gap:8, borderBottom:"1px solid rgba(255,255,255,0.03)", alignItems:"center" }}>
+              <div>
+                <div style={{ fontSize:12, fontWeight:500, color:"rgba(255,255,255,0.85)" }}>{l.first_name||"—"} {l.last_name||""}</div>
+                <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:2 }}>{l.leave_type} · {l.reason?.slice(0,40)}</div>
+              </div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)" }}>{l.start_date?.slice(0,10)}</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)" }}>{l.end_date?.slice(0,10)}</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)" }}>{l.total_days}j</div>
+              <div style={{ display:"flex", gap:6 }}>
+                <button onClick={()=>handleLeave(l.leave_id,"approve")} style={{ padding:"5px 10px", background:"rgba(29,158,117,0.12)", color:T.success, border:"1px solid rgba(29,158,117,0.3)", borderRadius:6, fontSize:10, cursor:"pointer", fontWeight:500 }}>Approuver</button>
+                <button onClick={()=>handleLeave(l.leave_id,"reject")} style={{ padding:"5px 10px", background:"rgba(204,0,0,0.1)", color:"#ff8888", border:"1px solid rgba(204,0,0,0.25)", borderRadius:6, fontSize:10, cursor:"pointer", fontWeight:500 }}>Rejeter</button>
+              </div>
+            </div>
+          ))}
         </CursorCard>
       )}
 
@@ -908,11 +1001,11 @@ function ITModule({ token, user }) {
     setLoading(true);
     try {
       if (isIT) {
-        const r = await fetch("http://localhost/api/it/helpdesk", { headers:{ Authorization:`Bearer ${token}` } });
+        const r = await fetch("/api/it/helpdesk", { headers:{ Authorization:`Bearer ${token}` } });
         const d = await r.json();
         setTickets(d.data || []);
       }
-      const r2 = await fetch("http://localhost/api/it/helpdesk/my-tickets", { headers:{ Authorization:`Bearer ${token}` } });
+      const r2 = await fetch("/api/it/helpdesk/my-tickets", { headers:{ Authorization:`Bearer ${token}` } });
       const d2 = await r2.json();
       setMyTickets(d2.data || []);
     } catch {}
@@ -921,7 +1014,7 @@ function ITModule({ token, user }) {
 
   const createTicket = async () => {
     if (!form.title || !form.description) return;
-    await fetch("http://localhost/api/it/helpdesk", {
+    await fetch("/api/it/helpdesk", {
       method:"POST", headers:{ "Content-Type":"application/json", Authorization:`Bearer ${token}` },
       body: JSON.stringify(form)
     });
@@ -999,73 +1092,275 @@ function ITModule({ token, user }) {
 }
 
 // ─── FINANCE MODULE ───────────────────────────────────────────────────────────
-function FinanceModule({ token }) {
+function FinanceModule({ token, user }) {
+  const isFinance = user?.department === "Finance" || user?.role === "admin";
+
+  const [dashboard, setDashboard] = useState(null);
+  const [expenses, setExpenses]   = useState([]);
+  const [budgets, setBudgets]     = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [showForm, setShowForm]   = useState(false);
+  const [expForm, setExpForm]     = useState({ title:"", description:"", amount:"", currency:"MAD", category:"other", expense_date:"" });
+  const [msg, setMsg]             = useState("");
+
+  useEffect(() => { fetchData(); }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const hdrs = { Authorization: `Bearer ${token}` };
+      if (isFinance) {
+        const [dashRes, expRes, budRes] = await Promise.all([
+          fetch("/api/finance/reports/dashboard", { headers: hdrs }),
+          fetch("/api/finance/expenses?limit=10", { headers: hdrs }),
+          fetch("/api/finance/budget?limit=4",    { headers: hdrs }),
+        ]);
+        const [dashData, expData, budData] = await Promise.all([
+          dashRes.json(), expRes.json(), budRes.json(),
+        ]);
+        if (dashData.success) setDashboard(dashData.data);
+        if (expData.success)  setExpenses(expData.data || []);
+        if (budData.success)  setBudgets(budData.data  || []);
+      } else {
+        const expRes = await fetch("/api/finance/expenses", { headers: hdrs });
+        const expData = await expRes.json();
+        if (expData.success) setExpenses(expData.data || []);
+      }
+    } catch {}
+    setLoading(false);
+  };
+
+  const submitExpense = async () => {
+    if (!expForm.title || !expForm.amount || !expForm.expense_date) {
+      setMsg("❌ Titre, montant et date sont requis"); return;
+    }
+    try {
+      const res = await fetch("/api/finance/expenses", {
+        method: "POST",
+        headers: { "Content-Type":"application/json", Authorization:`Bearer ${token}` },
+        body: JSON.stringify({ ...expForm, amount: parseFloat(expForm.amount) }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setMsg("❌ " + (d.message || "Erreur")); return; }
+      setMsg("✅ Note de frais soumise avec succès !");
+      setShowForm(false);
+      setExpForm({ title:"", description:"", amount:"", currency:"MAD", category:"other", expense_date:"" });
+      fetchData();
+      setTimeout(() => setMsg(""), 4000);
+    } catch { setMsg("❌ Erreur réseau"); }
+  };
+
+  const fmtK = (n) => (n != null ? Math.round(parseFloat(n) / 1000) : 0);
   const stats = [
-    { label:"Budget total (k MAD)", value:500, icon:"dollar", color:T.teal },
-    { label:"Dépenses (k MAD)", value:158, icon:"trending-up", color:T.red },
-    { label:"Factures en attente", value:7, icon:"alert-circle", color:T.warning },
-    { label:"Paiements effectués", value:43, icon:"check", color:T.success },
+    { label:"Budgets actifs (k MAD)",       value: fmtK(dashboard?.active_budgets?.total),       icon:"dollar",       color:T.teal    },
+    { label:"Dépenses approuvées (k MAD)",   value: fmtK(dashboard?.approved_expenses?.total),    icon:"trending-up",  color:T.red     },
+    { label:"Factures payées",               value: dashboard?.paid_invoices?.count       ?? 0,   icon:"check",        color:T.success },
+    { label:"Paiements complétés",           value: dashboard?.completed_payments?.count  ?? 0,   icon:"alert-circle", color:T.warning },
   ];
-  const barData = [
-    {l:"RH",v:45,c:T.teal},{l:"IT",v:20,c:T.red},{l:"Ops",v:25,c:T.warning},{l:"Admin",v:10,c:T.sage}
-  ];
+  const totalBudget = budgets.reduce((s, b) => s + parseFloat(b.amount || 0), 0);
+  const barData = budgets.slice(0, 5).map(b => ({
+    l: (b.name || "—").slice(0, 7),
+    v: totalBudget > 0 ? Math.round((parseFloat(b.amount) / totalBudget) * 100) : 0,
+    c: T.red,
+  }));
+  const expStatusColor = s => s === "approved" ? T.success : s === "pending" ? T.warning : T.danger;
+  const expStatusLabel = s => s === "approved" ? "Approuvée" : s === "pending" ? "En attente" : "Rejetée";
+  const lbl = { display:"block", fontSize:10, fontWeight:600, color:"rgba(255,255,255,0.4)", marginBottom:5, textTransform:"uppercase", letterSpacing:"0.06em" };
+
   return (
     <ModulePage>
-      <div style={{ fontSize:18, fontWeight:500, color:"#fff", marginBottom:20, fontFamily:"'Rajdhani',sans-serif" }}>Finance</div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
-        {stats.map((s,i)=><StatCard key={s.label} {...s} delay={i*.1} />)}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+        <div>
+          <div style={{ fontSize:18, fontWeight:500, color:"#fff", fontFamily:"'Rajdhani',sans-serif" }}>
+            {isFinance ? "Finance" : "Mes notes de frais"}
+          </div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>{expenses.length} dépense(s) enregistrée(s)</div>
+        </div>
+        <StardustButton onClick={() => setShowForm(!showForm)} style={{ padding:"9px 16px", fontSize:12, display:"flex", alignItems:"center", gap:6 }}>
+          <Icon name="plus" size={14} color="#fff" /> Nouvelle dépense
+        </StardustButton>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:14 }}>
-        <CursorCard style={{ padding:20 }}>
-          <div style={{ fontSize:13, fontWeight:500, color:"rgba(255,255,255,0.7)", marginBottom:16, fontFamily:"'Rajdhani',sans-serif" }}>Répartition du budget</div>
-          {[["RH",45,T.teal],["IT",20,T.red],["Opérations",25,T.warning],["Administration",10,T.sage]].map(([l,v,c])=>(
-            <div key={l} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
-              <div style={{ width:80, fontSize:12, color:"rgba(255,255,255,0.45)" }}>{l}</div>
-              <div style={{ flex:1, height:6, background:"rgba(255,255,255,0.05)", borderRadius:4, overflow:"hidden" }}>
-                <div style={{ height:"100%", background:c, borderRadius:4, width:`${v}%`, transition:"width 1s ease", boxShadow:`0 0 8px ${c}50` }} />
-              </div>
-              <div style={{ fontSize:12, fontWeight:500, color:"rgba(255,255,255,0.7)", width:35, textAlign:"right" }}>{v}%</div>
+
+      {msg && (
+        <div style={{ background:msg.startsWith("✅")?"rgba(29,158,117,0.12)":"rgba(204,0,0,0.12)", border:`0.5px solid ${msg.startsWith("✅")?"rgba(29,158,117,0.3)":"rgba(204,0,0,0.3)"}`, borderRadius:8, padding:"10px 14px", fontSize:12, color:msg.startsWith("✅")?T.success:"#ff8888", marginBottom:16, animation:"fadeIn .3s ease" }}>{msg}</div>
+      )}
+
+      {showForm && (
+        <CursorCard style={{ padding:20, marginBottom:20, animation:"slideIn .3s ease" }}>
+          <div style={{ fontSize:13, fontWeight:500, color:"rgba(255,255,255,0.85)", marginBottom:16, fontFamily:"'Rajdhani',sans-serif" }}>Nouvelle note de frais</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+            <div>
+              <label style={lbl}>Catégorie</label>
+              <select value={expForm.category} onChange={e=>setExpForm({...expForm,category:e.target.value})} style={{ ...darkInput }}>
+                {["travel","office","software","hardware","training","other"].map(o=><option key={o} value={o}>{o}</option>)}
+              </select>
             </div>
-          ))}
+            <div>
+              <label style={lbl}>Date de la dépense</label>
+              <input type="date" value={expForm.expense_date} onChange={e=>setExpForm({...expForm,expense_date:e.target.value})} style={{ ...darkInput }} />
+            </div>
+            <div>
+              <label style={lbl}>Montant</label>
+              <input type="number" step="0.01" min="0" value={expForm.amount} onChange={e=>setExpForm({...expForm,amount:e.target.value})} style={{ ...darkInput }} placeholder="0.00" />
+            </div>
+            <div>
+              <label style={lbl}>Devise</label>
+              <select value={expForm.currency} onChange={e=>setExpForm({...expForm,currency:e.target.value})} style={{ ...darkInput }}>
+                {["MAD","EUR","USD"].map(o=><option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom:12 }}>
+            <label style={lbl}>Titre / Objet</label>
+            <input value={expForm.title} onChange={e=>setExpForm({...expForm,title:e.target.value})} style={{ ...darkInput, width:"100%", boxSizing:"border-box" }} placeholder="Ex : Déplacement client Casablanca" />
+          </div>
+          <div style={{ marginBottom:16 }}>
+            <label style={lbl}>Description (optionnel)</label>
+            <textarea value={expForm.description} onChange={e=>setExpForm({...expForm,description:e.target.value})} rows={2} style={{ ...darkInput, width:"100%", boxSizing:"border-box", resize:"vertical" }} placeholder="Détails supplémentaires..." />
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <StardustButton onClick={submitExpense} style={{ padding:"9px 20px", fontSize:12 }}>Soumettre</StardustButton>
+            <button onClick={()=>setShowForm(false)} style={{ padding:"9px 20px", background:"rgba(255,255,255,0.05)", color:"rgba(255,255,255,0.5)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:8, fontSize:12, cursor:"pointer" }}>Annuler</button>
+          </div>
         </CursorCard>
-        <CursorCard style={{ padding:20 }}>
-          <div style={{ fontSize:13, fontWeight:500, color:"rgba(255,255,255,0.7)", marginBottom:16, fontFamily:"'Rajdhani',sans-serif" }}>Vue graphique</div>
-          <AnimatedBarChart data={barData} height={130} />
-        </CursorCard>
-      </div>
+      )}
+
+      {isFinance && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
+          {stats.map((s,i) => <StatCard key={s.label} {...s} delay={i*.1} />)}
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ padding:40, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>Chargement...</div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:isFinance?"1.4fr 1fr":"1fr", gap:14 }}>
+
+          <CursorCard style={{ padding:20, overflow:"hidden" }}>
+            <div style={{ fontSize:13, fontWeight:500, color:"rgba(255,255,255,0.7)", marginBottom:16, fontFamily:"'Rajdhani',sans-serif" }}>
+              {isFinance ? "Dépenses récentes" : "Mes dépenses"}
+            </div>
+            {expenses.length === 0 ? (
+              <div style={{ color:"rgba(255,255,255,0.3)", fontSize:12, padding:"20px 0" }}>Aucune dépense enregistrée.</div>
+            ) : expenses.map((e, i) => (
+              <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                <div>
+                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.85)", fontWeight:500 }}>{e.title}</div>
+                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:2 }}>{e.category} · {e.expense_date?.slice(0,10)}</div>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:"#fff" }}>{parseFloat(e.amount).toLocaleString()} {e.currency}</div>
+                  <span style={{ fontSize:10, padding:"3px 8px", borderRadius:20, fontWeight:500,
+                    background:`${expStatusColor(e.status)}15`, color:expStatusColor(e.status),
+                    border:`1px solid ${expStatusColor(e.status)}30` }}>
+                    {expStatusLabel(e.status)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </CursorCard>
+
+          {isFinance && (
+            <CursorCard style={{ padding:20 }}>
+              <div style={{ fontSize:13, fontWeight:500, color:"rgba(255,255,255,0.7)", marginBottom:16, fontFamily:"'Rajdhani',sans-serif" }}>Budgets actifs</div>
+              {barData.length > 0
+                ? <AnimatedBarChart data={barData} height={130} />
+                : <div style={{ color:"rgba(255,255,255,0.3)", fontSize:12, padding:"20px 0" }}>Aucun budget actif.</div>
+              }
+            </CursorCard>
+          )}
+
+        </div>
+      )}
     </ModulePage>
   );
 }
 
 // ─── OPS MODULE ──────────────────────────────────────────────────────────────
 function OpsModule({ token }) {
-  const projects = [
-    { name:"Migration Cloud", status:"En cours", progress:65, team:8 },
-    { name:"Audit Sécurité", status:"Planifié", progress:20, team:3 },
-    { name:"ERP Phase 2", status:"En cours", progress:40, team:12 },
-    { name:"Formation DevOps", status:"Terminé", progress:100, team:5 },
-  ];
+  const [projects, setProjects] = useState([]);
+  const [stats, setStats]       = useState(null);
+  const [loading, setLoading]   = useState(true);
+
+  useEffect(() => { fetchData(); }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const hdrs = { Authorization: `Bearer ${token}` };
+      const [projRes, statsRes] = await Promise.all([
+        fetch("/api/ops/projects",       { headers: hdrs }),
+        fetch("/api/ops/projects/stats", { headers: hdrs }),
+      ]);
+      const [projData, statsData] = await Promise.all([projRes.json(), statsRes.json()]);
+      if (projData.success)  setProjects(projData.data  || []);
+      if (statsData.success) setStats(statsData.data);
+    } catch {}
+    setLoading(false);
+  };
+
+  const statusLabel = s =>
+    s === "active"    ? "En cours"  :
+    s === "completed" ? "Terminé"   :
+    s === "planning"  ? "Planifié"  :
+    s === "on_hold"   ? "En pause"  :
+    s === "cancelled" ? "Annulé"    : s;
+
+  const statusStyle = s => {
+    if (s === "completed") return { bg:"rgba(29,158,117,0.12)",  color:T.success, border:"rgba(29,158,117,0.3)"  };
+    if (s === "active")    return { bg:"rgba(30,95,116,0.15)",   color:T.teal,    border:"rgba(30,95,116,0.3)"   };
+    if (s === "on_hold")   return { bg:"rgba(204,0,0,0.12)",     color:T.red,     border:"rgba(204,0,0,0.3)"     };
+    if (s === "cancelled") return { bg:"rgba(255,255,255,0.05)", color:"#888",    border:"rgba(255,255,255,0.1)" };
+    return                        { bg:"rgba(186,117,23,0.12)",  color:T.warning, border:"rgba(186,117,23,0.3)"  };
+  };
+
+  const opsStats = stats ? [
+    { label:"Projets actifs",    value: parseInt(stats.active    || 0), icon:"box",         color:T.teal    },
+    { label:"Terminés",          value: parseInt(stats.completed || 0), icon:"check",        color:T.success },
+    { label:"En pause",          value: parseInt(stats.on_hold   || 0), icon:"clock",        color:T.warning },
+    { label:"Progression moy.%", value: Math.round(parseFloat(stats.avg_progress || 0)), icon:"trending-up", color:T.red },
+  ] : [];
+
   return (
     <ModulePage>
       <div style={{ fontSize:18, fontWeight:500, color:"#fff", marginBottom:20, fontFamily:"'Rajdhani',sans-serif" }}>Opérations</div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-        {projects.map((p,i)=>(
-          <CursorCard key={i} style={{ padding:18, animation:`fadeIn .4s ease ${i*.1}s both` }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-              <div style={{ fontSize:13, fontWeight:500, color:"rgba(255,255,255,0.85)", fontFamily:"'Rajdhani',sans-serif" }}>{p.name}</div>
-              <span style={{ fontSize:10, padding:"3px 10px", borderRadius:20, fontWeight:500,
-                background:p.status==="Terminé"?"rgba(29,158,117,0.12)":p.status==="En cours"?"rgba(30,95,116,0.15)":"rgba(186,117,23,0.12)",
-                color:p.status==="Terminé"?T.success:p.status==="En cours"?T.teal:T.warning,
-                border:`1px solid ${p.status==="Terminé"?"rgba(29,158,117,0.3)":p.status==="En cours"?"rgba(30,95,116,0.3)":"rgba(186,117,23,0.3)"}` }}>{p.status}</span>
-            </div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:12 }}>{p.team} membres</div>
-            <div style={{ height:5, background:"rgba(255,255,255,0.05)", borderRadius:3, overflow:"hidden", marginBottom:6 }}>
-              <div style={{ height:"100%", background:p.progress===100?T.success:T.teal, borderRadius:3, width:`${p.progress}%`, transition:"width 1s ease", boxShadow:`0 0 8px ${p.progress===100?T.success:T.teal}50` }} />
-            </div>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", textAlign:"right" }}>{p.progress}%</div>
-          </CursorCard>
-        ))}
-      </div>
+
+      {opsStats.length > 0 && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
+          {opsStats.map((s,i) => <StatCard key={s.label} {...s} delay={i*.1} />)}
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ padding:40, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>Chargement...</div>
+      ) : projects.length === 0 ? (
+        <div style={{ padding:40, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>Aucun projet trouvé.</div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+          {projects.map((p, i) => {
+            const ss = statusStyle(p.status);
+            return (
+              <CursorCard key={p.project_id || i} style={{ padding:18, animation:`fadeIn .4s ease ${i*.1}s both` }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                  <div style={{ fontSize:13, fontWeight:500, color:"rgba(255,255,255,0.85)", fontFamily:"'Rajdhani',sans-serif" }}>{p.name}</div>
+                  <span style={{ fontSize:10, padding:"3px 10px", borderRadius:20, fontWeight:500,
+                    background:ss.bg, color:ss.color, border:`1px solid ${ss.border}` }}>
+                    {statusLabel(p.status)}
+                  </span>
+                </div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:12 }}>{p.member_count || 0} membres</div>
+                <div style={{ height:5, background:"rgba(255,255,255,0.05)", borderRadius:3, overflow:"hidden", marginBottom:6 }}>
+                  <div style={{ height:"100%", borderRadius:3, transition:"width 1s ease",
+                    background: p.progress === 100 ? T.success : T.teal,
+                    width:`${p.progress || 0}%`,
+                    boxShadow:`0 0 8px ${p.progress === 100 ? T.success : T.teal}50` }} />
+                </div>
+                <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", textAlign:"right" }}>{p.progress || 0}%</div>
+              </CursorCard>
+            );
+          })}
+        </div>
+      )}
     </ModulePage>
   );
 }
@@ -1096,13 +1391,13 @@ function UsersModule({ token }) {
   const [filterRole, setFilterRole] = useState("all");
   const [showPwForm, setShowPwForm] = useState(null);
   const [msg, setMsg] = useState("");
-  const [form, setForm] = useState({ username:"", email:"", role:"employee", department:"", job_title:"" });
+  const [form, setForm] = useState({ username:"", email:"", role:"employee", department:"IT", job_title:"" });
   const [createdUser, setCreatedUser] = useState(null);
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const r = await fetch("http://localhost/api/auth/users", { headers:{ Authorization:`Bearer ${token}` } });
+      const r = await fetch("/api/auth/users", { headers:{ Authorization:`Bearer ${token}` } });
       const d = await r.json();
       setUsers(d.data || []);
     } catch {}
@@ -1117,7 +1412,7 @@ function UsersModule({ token }) {
     if (!form.username || !form.email || !form.department) { showMsg("❌ Nom d'utilisateur, email et département sont requis"); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { showMsg("❌ Format d'email invalide"); return; }
     try {
-      const r = await fetch("http://localhost/api/auth/admin/create", {
+      const r = await fetch("/api/auth/admin/create", {
         method:"POST", headers:{ "Content-Type":"application/json", Authorization:`Bearer ${token}` },
         body: JSON.stringify(form),
       });
@@ -1132,7 +1427,7 @@ function UsersModule({ token }) {
 
   const toggleUser = async (id, isActive) => {
     try {
-      const r = await fetch(`http://localhost/api/auth/${id}/${isActive?"deactivate":"activate"}`, {
+      const r = await fetch(`/api/auth/${id}/${isActive?"deactivate":"activate"}`, {
         method:"POST", headers:{ Authorization:`Bearer ${token}` },
       });
       const d = await r.json();
@@ -1144,7 +1439,7 @@ function UsersModule({ token }) {
 
   const resetPassword = async (id) => {
     try {
-      const r = await fetch(`http://localhost/api/auth/${id}/reset-password`, {
+      const r = await fetch(`/api/auth/${id}/reset-password`, {
         method:"POST", headers:{ Authorization:`Bearer ${token}` },
       });
       const d = await r.json();
@@ -1213,10 +1508,11 @@ function UsersModule({ token }) {
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
             <StableInput label="Nom d'utilisateur *" name="username" value={form.username} onChange={e=>setForm({...form,username:e.target.value})} />
             <StableInput label="Email professionnel *" name="email" type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="nom@domaine.com" />
-            <StableInput label="Département *" name="department" value={form.department} onChange={e=>setForm({...form,department:e.target.value})} />
+            <StableInput label="Département *" name="department" value={form.department} onChange={e=>setForm({...form,department:e.target.value})}
+              options={[{value:"IT",label:"IT"},{value:"HR",label:"HR"},{value:"Finance",label:"Finance"},{value:"Operations",label:"Operations"}]} />
             <StableInput label="Titre du poste" name="job_title" value={form.job_title} onChange={e=>setForm({...form,job_title:e.target.value})} placeholder="Ex: Manager RH..." />
             <StableInput label="Rôle" name="role" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}
-              options={[{value:"employee",label:"Employé"},{value:"hr",label:"RH"},{value:"finance",label:"Finance"},{value:"it",label:"IT"},{value:"operations",label:"Opérations"},{value:"admin",label:"Admin"}]} />
+              options={[{value:"employee",label:"Employé"},{value:"manager",label:"Manager"},{value:"admin",label:"Admin"}]} />
           </div>
           <div style={{ display:"flex", gap:8 }}>
             <StardustButton onClick={createUser} style={{ padding:"9px 20px", fontSize:12 }}>Créer le compte</StardustButton>
@@ -1235,11 +1531,8 @@ function UsersModule({ token }) {
           style={{ padding:"8px 12px", border:"1px solid rgba(255,255,255,0.08)", borderRadius:8, fontSize:12, outline:"none", background:"rgba(255,255,255,0.04)", color:"rgba(255,255,255,0.7)" }}>
           <option value="all">Tous les rôles</option>
           <option value="admin">Admin</option>
+          <option value="manager">Manager</option>
           <option value="employee">Employé</option>
-          <option value="hr">RH</option>
-          <option value="finance">Finance</option>
-          <option value="it">IT</option>
-          <option value="operations">Opérations</option>
         </select>
       </div>
 
@@ -1337,20 +1630,20 @@ function LeaveModule({ token, user }) {
   useEffect(()=>{
     if (user?.id) {
       setForm(f=>({...f, employee_id: user.id}));
-      fetch(`http://localhost/api/hr/leave/my-requests`, { headers:{ Authorization:`Bearer ${token}` } })
+      fetch(`/api/hr/leave/my-requests`, { headers:{ Authorization:`Bearer ${token}` } })
         .then(r=>r.json()).then(d=>setLeaves(d.data||[])).catch(()=>{});
     }
   },[user]);
 
   const submitLeave = async () => {
     if (!form.start_date || !form.end_date) return;
-    await fetch("http://localhost/api/hr/leave/", {
+    await fetch("/api/hr/leave/", {
       method:"POST", headers:{ "Content-Type":"application/json", Authorization:`Bearer ${token}` },
       body: JSON.stringify(form)
     });
     setShowForm(false);
     if (user?.id) {
-      fetch(`http://localhost/api/hr/leave/my-requests`, { headers:{ Authorization:`Bearer ${token}` } })
+      fetch(`/api/hr/leave/my-requests`, { headers:{ Authorization:`Bearer ${token}` } })
         .then(r=>r.json()).then(d=>setLeaves(d.data||[])).catch(()=>{});
     }
   };
@@ -1421,28 +1714,72 @@ function LeaveModule({ token, user }) {
 }
 
 // ─── PROFILE MODULE ───────────────────────────────────────────────────────────
-function ProfileModule({ user }) {
+function ProfileModule({ user, token }) {
+  const [payslips, setPayslips] = useState([]);
+  const [loadingPay, setLoadingPay] = useState(true);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch("/api/hr/payroll/my-payslips?limit=6", { headers:{ Authorization:`Bearer ${token}` } })
+      .then(r=>r.json())
+      .then(d=>{ if (d.success) setPayslips(d.data||[]); })
+      .catch(()=>{})
+      .finally(()=>setLoadingPay(false));
+  }, [token]);
+
+  const payStatus = s => s === "paid" ? T.success : s === "pending" ? T.warning : T.red;
+
   return (
     <ModulePage>
       <div style={{ fontSize:18, fontWeight:500, color:"#fff", marginBottom:20, fontFamily:"'Rajdhani',sans-serif" }}>Mon profil</div>
-      <CursorCard style={{ padding:28, maxWidth:500 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:24, paddingBottom:24, borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
-          <div style={{ width:60, height:60, borderRadius:"50%", background:"rgba(204,0,0,0.15)", border:"2px solid rgba(204,0,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, fontWeight:600, color:T.red }}>
-            {user?.username?.[0]?.toUpperCase()}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1.4fr", gap:16, alignItems:"start" }}>
+        <CursorCard style={{ padding:28 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:24, paddingBottom:24, borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
+            <div style={{ width:60, height:60, borderRadius:"50%", background:"rgba(204,0,0,0.15)", border:"2px solid rgba(204,0,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, fontWeight:600, color:T.red }}>
+              {user?.username?.[0]?.toUpperCase()}
+            </div>
+            <div>
+              <div style={{ fontSize:16, fontWeight:500, color:"rgba(255,255,255,0.9)" }}>{user?.username}</div>
+              <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:3 }}>{user?.email}</div>
+              <div style={{ marginTop:6 }}><span style={{ fontSize:10, padding:"3px 10px", borderRadius:20, background:"rgba(29,158,117,0.12)", color:T.success, fontWeight:500, border:"1px solid rgba(29,158,117,0.3)" }}>Actif</span></div>
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize:16, fontWeight:500, color:"rgba(255,255,255,0.9)" }}>{user?.username}</div>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:3 }}>{user?.email}</div>
-            <div style={{ marginTop:6 }}><span style={{ fontSize:10, padding:"3px 10px", borderRadius:20, background:"rgba(29,158,117,0.12)", color:T.success, fontWeight:500, border:"1px solid rgba(29,158,117,0.3)" }}>Actif</span></div>
-          </div>
-        </div>
-        {[["Rôle",user?.role],["Département",user?.department],["ID",user?.id]].map(([l,v])=>(
-          <div key={l} style={{ display:"flex", justifyContent:"space-between", padding:"12px 0", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>{l}</div>
-            <div style={{ fontSize:12, fontWeight:500, color:"rgba(255,255,255,0.8)" }}>{v||"—"}</div>
-          </div>
-        ))}
-      </CursorCard>
+          {[["Rôle",user?.role],["Département",user?.department],["ID",user?.id]].map(([l,v])=>(
+            <div key={l} style={{ display:"flex", justifyContent:"space-between", padding:"12px 0", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
+              <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>{l}</div>
+              <div style={{ fontSize:12, fontWeight:500, color:"rgba(255,255,255,0.8)" }}>{v||"—"}</div>
+            </div>
+          ))}
+        </CursorCard>
+
+        <CursorCard style={{ padding:20, overflow:"hidden" }}>
+          <div style={{ fontSize:13, fontWeight:500, color:"rgba(255,255,255,0.7)", marginBottom:16, fontFamily:"'Rajdhani',sans-serif" }}>Mes bulletins de paie</div>
+          {loadingPay ? (
+            <div style={{ padding:20, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>Chargement...</div>
+          ) : payslips.length === 0 ? (
+            <div style={{ padding:20, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>Aucun bulletin disponible.</div>
+          ) : payslips.map((p,i)=>(
+            <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+              <div>
+                <div style={{ fontSize:12, fontWeight:500, color:"rgba(255,255,255,0.85)" }}>
+                  {p.pay_period_start?.slice(0,7)} → {p.pay_period_end?.slice(0,7)}
+                </div>
+                <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:2 }}>{p.payment_method}</div>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:"#fff" }}>
+                  {parseFloat(p.net_amount||0).toLocaleString()} {p.currency}
+                </div>
+                <span style={{ fontSize:10, padding:"3px 8px", borderRadius:20, fontWeight:500,
+                  background:`${payStatus(p.status)}15`, color:payStatus(p.status),
+                  border:`1px solid ${payStatus(p.status)}30` }}>
+                  {p.status === "paid" ? "Payé" : p.status === "pending" ? "En attente" : p.status}
+                </span>
+              </div>
+            </div>
+          ))}
+        </CursorCard>
+      </div>
     </ModulePage>
   );
 }
@@ -1472,7 +1809,7 @@ function ChangePasswordScreen({ user, token, onSuccess }) {
     if (score < 4) { setError("Mot de passe trop faible"); return; }
     setLoading(true); setError("");
     try {
-      const res = await fetch("http://localhost/api/auth/change-password", {
+      const res = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ current_password: current, new_password: newPw }),
@@ -1537,6 +1874,81 @@ function ChangePasswordScreen({ user, token, onSuccess }) {
   );
 }
 
+// ─── CHAT HISTORY MODULE ──────────────────────────────────────────────────────
+function ChatHistoryModule({ token, userId }) {
+  const [conversations, setConversations] = useState([]);
+  const [selectedConv, setSelectedConv] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/chatbot/history/${userId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(d => { setConversations(d.conversations || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [userId]);
+
+  const loadMessages = (convId) => {
+    setSelectedConv(convId);
+    fetch(`/api/chatbot/history/${userId}/${convId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(d => setMessages(d.messages || []))
+      .catch(() => {});
+  };
+
+  return (
+    <ModulePage>
+      <div style={{ fontSize:18, fontWeight:500, color:"#fff", marginBottom:20, fontFamily:"'Rajdhani',sans-serif" }}>
+        💬 Historique des conversations
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:16, height:"70vh" }}>
+        {/* Liste conversations */}
+        <CursorCard style={{ padding:16, overflowY:"auto" }}>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginBottom:12, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+            Conversations
+          </div>
+          {loading ? (
+            <div style={{ color:"rgba(255,255,255,0.3)", fontSize:12 }}>Chargement...</div>
+          ) : conversations.length === 0 ? (
+            <div style={{ color:"rgba(255,255,255,0.3)", fontSize:12 }}>Aucune conversation.</div>
+          ) : conversations.map((c, i) => (
+            <div key={i} onClick={() => loadMessages(c.id)}
+              style={{ padding:"10px 12px", borderRadius:8, marginBottom:6, cursor:"pointer", background:selectedConv===c.id?"rgba(204,0,0,0.15)":"rgba(255,255,255,0.03)", border:`1px solid ${selectedConv===c.id?"rgba(204,0,0,0.3)":"rgba(255,255,255,0.06)"}`, transition:"all .15s" }}>
+              <div style={{ fontSize:12, color:"rgba(255,255,255,0.8)", fontWeight:500 }}>
+                💬 {c.title || "Conversation"}
+              </div>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:4 }}>
+                {new Date(c.created_at).toLocaleDateString("fr-FR")}
+              </div>
+            </div>
+          ))}
+        </CursorCard>
+
+        {/* Messages */}
+        <CursorCard style={{ padding:16, overflowY:"auto" }}>
+          {!selectedConv ? (
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100%", color:"rgba(255,255,255,0.3)", fontSize:12 }}>
+              Sélectionnez une conversation pour voir les messages
+            </div>
+          ) : messages.length === 0 ? (
+            <div style={{ color:"rgba(255,255,255,0.3)", fontSize:12 }}>Aucun message.</div>
+          ) : messages.map((m, i) => (
+            <div key={i} style={{ display:"flex", justifyContent:m.role==="user"?"flex-end":"flex-start", marginBottom:10 }}>
+              <div style={{ maxWidth:"80%", padding:"10px 14px", borderRadius:10, background:m.role==="user"?"rgba(204,0,0,0.8)":"rgba(255,255,255,0.08)", color:"#fff", fontSize:13, lineHeight:1.5 }}>
+                {m.content}
+              </div>
+            </div>
+          ))}
+        </CursorCard>
+      </div>
+    </ModulePage>
+  );
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
@@ -1554,7 +1966,7 @@ export default function App() {
 
   useEffect(()=>{
     if (user) {
-      if (user.role === "admin" || user.role === "manager") setActive("dashboard");
+      if (user.role === "admin") setActive("dashboard");
       else setActive("home");
     }
   },[user]);
@@ -1571,7 +1983,7 @@ export default function App() {
     localStorage.setItem("mustChangePw", "false");
   };
 
-  const titles = { dashboard:"Vue d'ensemble", hr:"Ressources Humaines", it:"Helpdesk IT", finance:"Finance", operations:"Opérations", users:"Utilisateurs", home:"Accueil", tickets:"Mes tickets", leave:"Congés", profile:"Mon profil" };
+  const titles = { dashboard:"Vue d'ensemble", hr:"Ressources Humaines", it:"Helpdesk IT", finance:"Finance", operations:"Opérations", users:"Utilisateurs", home:"Accueil", tickets:"Mes tickets", leave:"Congés", profile:"Mon profil", expenses:"Mes dépenses" };
   const isAdmin   = user?.role === "admin";
   const isManager = user?.role === "manager";
   const userDept  = user?.department;
@@ -1588,16 +2000,18 @@ export default function App() {
 
   const renderContent = () => {
     switch(active) {
-      case "dashboard":   return canAccess("dashboard") ? <AdminDashboard user={user} /> : <EmployeeHome user={user} />;
-      case "hr":         return canAccess("hr")        ? <HRModule token={token} />       : <EmployeeHome user={user} />;
+      case "dashboard":   return canAccess("dashboard") ? <AdminDashboard user={user} token={token} /> : <EmployeeHome user={user} />;
+      case "hr":         return canAccess("hr")        ? <HRModule token={token} user={user} />  : <EmployeeHome user={user} />;
       case "it":
       case "tickets":    return <ITModule token={token} user={user} />;
-      case "finance":    return canAccess("finance")   ? <FinanceModule token={token} />  : <EmployeeHome user={user} />;
+      case "finance":    return canAccess("finance")   ? <FinanceModule token={token} user={user} />  : <EmployeeHome user={user} />;
+      case "expenses":   return <FinanceModule token={token} user={user} />;
       case "operations": return canAccess("operations")? <OpsModule token={token} />      : <EmployeeHome user={user} />;
       case "users":      return isAdmin                ? <UsersModule token={token} />    : <EmployeeHome user={user} />;
       case "home":       return <EmployeeHome user={user} />;
       case "leave":      return <LeaveModule token={token} user={user} />;
-      case "profile":    return <ProfileModule user={user} />;
+      case "profile":    return <ProfileModule user={user} token={token} />;
+      case "chat-history": return <ChatHistoryModule token={token} userId={user?.id} />;
       default:           return canAccess("dashboard") ? <AdminDashboard user={user} /> : <EmployeeHome user={user} />;
     }
   };

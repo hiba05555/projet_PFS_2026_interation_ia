@@ -12,9 +12,8 @@ Prérequis:
 """
 
 import json
+import os
 import chromadb
-from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
 import time
 
 print("🔄 Initialisation du script de vectorisation RAG...\n")
@@ -24,8 +23,11 @@ print("🔄 Initialisation du script de vectorisation RAG...\n")
 # ============================================================================
 
 # ChromaDB connection
-CHROMADB_HOST = "localhost"
-CHROMADB_PORT = 8000
+# CHROMADB_HOST peut être surchargé via variable d'environnement :
+#   - Depuis l'hôte           : CHROMADB_HOST=localhost  (défaut)
+#   - Depuis un conteneur Docker sur le même réseau : CHROMADB_HOST=erp-chromadb
+CHROMADB_HOST = os.environ.get("CHROMADB_HOST", "localhost")
+CHROMADB_PORT = int(os.environ.get("CHROMADB_PORT", "8000"))
 COLLECTION_NAME = "erp_dataprotect_docs"
 
 # Modèle d'embedding
@@ -47,13 +49,13 @@ print(f"  - Documentation: {DOC_FILE}\n")
 print("🔄 Connexion à ChromaDB...")
 
 try:
-    # Client ChromaDB
+    # Client ChromaDB — compatible ChromaDB >= 1.0.0
+    # Settings(allow_reset=True) supprimé : inutile pour un client HTTP
     client = chromadb.HttpClient(
         host=CHROMADB_HOST,
-        port=CHROMADB_PORT,
-        settings=Settings(allow_reset=True)
+        port=CHROMADB_PORT
     )
-    
+
     # Tester la connexion
     client.heartbeat()
     print("✅ Connexion ChromaDB réussie!\n")

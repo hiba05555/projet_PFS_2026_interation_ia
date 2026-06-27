@@ -118,7 +118,7 @@ app.post('/api/chatbot/chat', async (req, res) => {
         Authorization: req.headers.authorization,
         'Content-Type': 'application/json'
       },
-      timeout: 30000 // 30 secondes timeout
+      timeout: 120000 // 120 secondes timeout
     });
     res.json(response.data);
   } catch (error) {
@@ -158,6 +158,33 @@ app.get('/api/chatbot/health', async (req, res) => {
     });
   }
 });
+
+// GET /api/chatbot/history/:userId - Conversations d'un utilisateur
+app.get('/api/chatbot/history/:userId', async (req, res) => {
+  try {
+    const response = await axios.get(
+      `${CHATBOT_SERVICE_URL}/history/${req.params.userId}`,
+      { timeout: 10000 }
+    );
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ conversations: [] });
+  }
+});
+
+// GET /api/chatbot/history/:userId/:convId - Messages d'une conversation
+app.get('/api/chatbot/history/:userId/:convId', async (req, res) => {
+  try {
+    const response = await axios.get(
+      `${CHATBOT_SERVICE_URL}/history/${req.params.userId}/${req.params.convId}`,
+      { timeout: 10000 }
+    );
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ messages: [] });
+  }
+});
+
 
 // Enregistre tous les proxies dynamiquement
 Object.entries(services).forEach(([path, url]) => {
