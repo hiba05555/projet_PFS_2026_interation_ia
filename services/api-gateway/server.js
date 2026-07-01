@@ -110,22 +110,28 @@ const services = {
 // CHATBOT AI - Routes
 // ============================================================================
 
+// Décorateur réutilisé pour les routes chatbot custom (même logique que addUserContext)
+const buildChatbotHeaders = (req) => {
+  const headers = { 'Content-Type': 'application/json' };
+  if (req.user) {
+    headers['X-User-Context'] = JSON.stringify(req.user);
+  }
+  return headers;
+};
+
 // POST /api/chatbot/chat - Envoyer une question au chatbot
 app.post('/api/chatbot/chat', async (req, res) => {
   try {
     const response = await axios.post(`${CHATBOT_SERVICE_URL}/chat`, req.body, {
-      headers: { 
-        Authorization: req.headers.authorization,
-        'Content-Type': 'application/json'
-      },
-      timeout: 120000 // 120 secondes timeout
+      headers: buildChatbotHeaders(req),
+      timeout: 120000 // 120 secondes timeout — modèle local CPU lent
     });
     res.json(response.data);
   } catch (error) {
     console.error('Chatbot chat error:', error.message);
-    res.status(error.response?.status || 500).json({
-      error: 'Chatbot request failed',
-      message: error.response?.data?.message || error.message
+    res.status(error.response?.status || 503).json({
+      success: false,
+      error: 'Service momentanément indisponible.'
     });
   }
 });
@@ -133,13 +139,16 @@ app.post('/api/chatbot/chat', async (req, res) => {
 // POST /api/chatbot/reset - Réinitialiser contexte conversation
 app.post('/api/chatbot/reset', async (req, res) => {
   try {
-    const response = await axios.post(`${CHATBOT_SERVICE_URL}/reset`, req.body);
+    const response = await axios.post(`${CHATBOT_SERVICE_URL}/reset`, req.body, {
+      headers: buildChatbotHeaders(req),
+      timeout: 5000
+    });
     res.json(response.data);
   } catch (error) {
     console.error('Chatbot reset error:', error.message);
-    res.status(500).json({ 
-      error: 'Reset failed',
-      message: error.message 
+    res.status(error.response?.status || 503).json({
+      success: false,
+      error: 'Service momentanément indisponible.'
     });
   }
 });
@@ -147,14 +156,17 @@ app.post('/api/chatbot/reset', async (req, res) => {
 // GET /api/chatbot/health - Vérifier santé du service chatbot
 app.get('/api/chatbot/health', async (req, res) => {
   try {
-    const response = await axios.get(`${CHATBOT_SERVICE_URL}/health`);
+    const response = await axios.get(`${CHATBOT_SERVICE_URL}/health`, {
+      headers: buildChatbotHeaders(req),
+      timeout: 5000
+    });
     res.json(response.data);
   } catch (error) {
     console.error('Chatbot health check failed:', error.message);
-    res.status(503).json({ 
+    res.status(503).json({
+      success: false,
       status: 'unhealthy',
-      service: 'chatbot',
-      error: error.message
+      service: 'chatbot'
     });
   }
 });
@@ -164,11 +176,12 @@ app.get('/api/chatbot/history/:userId', async (req, res) => {
   try {
     const response = await axios.get(
       `${CHATBOT_SERVICE_URL}/history/${req.params.userId}`,
-      { timeout: 10000 }
+      { headers: buildChatbotHeaders(req), timeout: 10000 }
     );
     res.json(response.data);
   } catch (error) {
-    res.status(500).json({ conversations: [] });
+    console.error('Chatbot history error:', error.message);
+    res.status(503).json({ success: false, conversations: [] });
   }
 });
 
@@ -177,14 +190,14 @@ app.get('/api/chatbot/history/:userId/:convId', async (req, res) => {
   try {
     const response = await axios.get(
       `${CHATBOT_SERVICE_URL}/history/${req.params.userId}/${req.params.convId}`,
-      { timeout: 10000 }
+      { headers: buildChatbotHeaders(req), timeout: 10000 }
     );
     res.json(response.data);
   } catch (error) {
-    res.status(500).json({ messages: [] });
+    console.error('Chatbot history error:', error.message);
+    res.status(503).json({ success: false, messages: [] });
   }
 });
-
 
 // Enregistre tous les proxies dynamiquement
 Object.entries(services).forEach(([path, url]) => {

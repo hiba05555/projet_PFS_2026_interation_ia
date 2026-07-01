@@ -511,16 +511,25 @@ services:
       - erp-back-tier
     restart: unless-stopped
 
+  ollama:
+    build:
+      context: ./chatbot-finetuning
+      dockerfile: Dockerfile
+    container_name: erp-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - erp-back-tier
+    restart: unless-stopped 
+
   chatbot-service:
     build:
       context: ./chatbot-service
       dockerfile: Dockerfile
     container_name: erp-chatbot
-    ports:
-      - "3500:3500"
     environment:
       - NODE_ENV=production
-      - OLLAMA_URL=https://53572595caf9ef.lhr.life/
+      - OLLAMA_URL=http://erp-ollama:11434 
       - OLLAMA_MODEL=erp-dataprotect
       - CHROMADB_URL=http://erp-chromadb:8000
       - REDIS_URL=redis://:${REDIS_PASSWORD:-change_me}@erp-redis:6379
@@ -540,6 +549,110 @@ services:
       - erp-front-tier
     restart: unless-stopped
 
+
+
+# ============================================================================
+  # COUCHE MONITORING
+  # ============================================================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: erp-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=7d'
+    ports:
+      - "9090:9090"
+    networks:
+      - erp-back-tier
+      - erp-front-tier
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: erp-grafana
+    ports:
+      - "3100:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - erp-front-tier
+      - erp-back-tier
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: erp-cadvisor
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - erp-back-tier
+    restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: erp-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - erp-back-tier
+    restart: unless-stopped
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: erp-logstash
+    environment:
+      - LS_JAVA_OPTS=-Xms256m -Xmx256m
+    volumes:
+      - ./monitoring/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    ports:
+      - "5044:5044"
+      - "5000:5000"
+    depends_on:
+      - elasticsearch
+    networks:
+      - erp-back-tier
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: erp-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - erp-back-tier
+      - erp-front-tier
+    restart: unless-stopped
+
+
 networks:
   erp-front-tier:
     driver: bridge
@@ -551,3 +664,6 @@ volumes:
   postgres_data:
   grafana_data:
   chromadb_data:
+  ollama_data: 
+  prometheus_data:
+  elasticsearch_data:

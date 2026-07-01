@@ -38,3 +38,4 @@ postgres-data/
 redis-data/
 grafana-data/
 prometheus-data/
+ollama_data/

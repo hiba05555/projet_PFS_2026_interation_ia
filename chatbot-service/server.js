@@ -21,6 +21,19 @@ const dbClient = require('./db');
 const contextManager = require('./context');
 const functionHandler = require('./functions');
 
+// Extrait l'identité utilisateur depuis le header de confiance posé par le gateway
+// (plutôt que de faire confiance à userId envoyé dans le body par le client)
+function getUserContext(req) {
+  const raw = req.headers['x-user-context'];
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    logger.error(`Invalid X-User-Context header: ${err.message}`);
+    return null;
+  }
+}
+
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
@@ -78,19 +91,15 @@ app.get('/health', (req, res) => {
 
 app.post('/chat', async (req, res) => {
   try {
-    const { 
-      query, 
-      userId, 
-      conversationId, 
-      userToken 
-    } = req.body;
-
+    const userContext = getUserContext(req);
+    const { query, conversationId, userToken } = req.body;
+    const userId = userContext?.id;
     // Validation
     if (!query || !userId) {
       return res.status(400).json({
-        error: 'Missing required fields: query and userId'
+        error: 'Missing required fields: query, or unauthenticated request'
       });
-    }
+    } 
 
     logger.info(`Chat request from user ${userId}: "${query}"`);
 
@@ -210,11 +219,13 @@ Ne mentionne pas les détails techniques JSON.
 
 app.post('/reset', async (req, res) => {
   try {
-    const { conversationId, userId } = req.body;
-    
+    const userContext = getUserContext(req);
+    const { conversationId } = req.body;
+    const userId = userContext?.id;
+
     if (!conversationId && !userId) {
       return res.status(400).json({
-        error: 'Missing conversationId or userId'
+        error: 'Missing conversationId or unauthenticated request'
       });
     }
 

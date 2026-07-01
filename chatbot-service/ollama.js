@@ -1,19 +1,19 @@
 const axios = require('axios');
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://ollama:11434';
-const MODEL_NAME = process.env.OLLAMA_MODEL || 'mistral-erp-dataprotect-q4';
+const MODEL_NAME = process.env.OLLAMA_MODEL || 'erp-dataprotect';
 
 const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-  'Content-Type': 'application/json',
-  'bypass-tunnel-reminder': 'true'
+  'Content-Type': 'application/json'
 };
 
 async function chat(prompt, options = {}) {
   try {
     const startTime = Date.now();
-    
-    // Format Alpaca pour le modèle fine-tuné
+
+    // Format Alpaca pour le modèle fine-tuné (cohérent avec le dataset d'entraînement).
+    // Le Modelfile passe le prompt tel quel (TEMPLATE """{{ .Prompt }}"""),
+    // donc le formatage complet se fait ici, une seule fois.
     const formattedPrompt = `### Instruction:
 ${prompt}
 
@@ -22,7 +22,7 @@ ${prompt}
 
 ### Response:
 `;
-    
+
     const response = await axios.post(
       `${OLLAMA_URL}/api/generate`,
       {
@@ -42,6 +42,7 @@ ${prompt}
         headers: HEADERS
       }
     );
+
     const duration = Date.now() - startTime;
     console.log(`Ollama inference completed in ${duration}ms`);
     return response.data.response.trim();

@@ -2,17 +2,17 @@
 # ============================
 # Modele Mistral 7B Instruct v0.3 (Q4_K_M) fine-tune pour ERP DataProtect
 #
-# Usage (apres docker cp du .gguf dans le conteneur) :
-#   docker exec erp-ollama ollama create erp-dataprotect -f /tmp/Modelfile
-#
-# Le FROM pointe vers le chemin du .gguf DANS le conteneur erp-ollama.
-# Ce chemin est defini par le setup script qui execute docker cp avant ollama create.
+# Le GGUF et ce Modelfile sont copies dans l'image au build
+# (voir chatbot-finetuning/Dockerfile.ollama), puis erp-ollama
+# execute "ollama create erp-dataprotect -f /models/Modelfile"
+# automatiquement au demarrage via entrypoint.sh.
 
-FROM /tmp/mistral-7b-instruct-v0.3.Q4_K_M.gguf
+
+FROM /models/mistral-7b-instruct-v0.3.Q4_K_M.gguf
 
 # Template au format d'instruction Mistral Instruct v0.1/v0.2/v0.3
 # Utilise avec /api/generate (prompt direct), pas /api/chat
-TEMPLATE """[INST] {{ .Prompt }} [/INST]"""
+TEMPLATE """{{ .Prompt }}"""
 
 # Parametres coherents avec ollama.js (temperature, top_p, top_k, repeat_penalty)
 PARAMETER temperature 0.7
@@ -24,8 +24,8 @@ PARAMETER repeat_penalty 1.1
 PARAMETER num_ctx 2048
 
 # Tokens d'arret pour eviter les hallucinations de tour suivant
-PARAMETER stop "[INST]"
-PARAMETER stop "[/INST]"
+PARAMETER stop "### Instruction:"
+PARAMETER stop "### Input:"
 PARAMETER stop "</s>"
 
 # Description du modele

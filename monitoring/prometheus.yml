@@ -3,65 +3,68 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  # API Gateway
+
+  # ── Container metrics (cAdvisor) ──────────────────────────────────────────
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # ── API Gateway ───────────────────────────────────────────────────────────
   - job_name: 'api-gateway'
     static_configs:
-      - targets: ['api-gateway:3000']
+      - targets: ['erp-gateway:3000']
 
-  # Auth Service
+  # ── Auth Service ──────────────────────────────────────────────────────────
   - job_name: 'auth-service'
     static_configs:
-      - targets: ['auth-service:3001']
+      - targets: ['erp-auth:3001']
 
-  # IT Services
+  # ── IT Services ───────────────────────────────────────────────────────────
   - job_name: 'it-services'
     static_configs:
       - targets:
-        - 'it-helpdesk:3101'
-        - 'it-accounts:3102'
-        - 'it-equipment:3103'
-        - 'it-monitoring:3104'
-        - 'it-licenses:3105'
+        - 'erp-it-helpdesk:3101'
+        - 'erp-it-accounts:3102'
+        - 'erp-it-equipment:3103'
+        - 'erp-it-monitoring:3104'
+        - 'erp-it-licenses:3105'
 
-  # HR Services
+  # ── HR Services ───────────────────────────────────────────────────────────
   - job_name: 'hr-services'
     static_configs:
       - targets:
-        - 'hr-employees:3201'
-        - 'hr-leave:3202'
-        - 'hr-recruitment:3203'
-        - 'hr-payroll:3204'
-        - 'hr-performance:3205'
+        - 'erp-hr-employees:3201'
+        - 'erp-hr-leave:3202'
+        - 'erp-hr-recruitment:3203'
+        - 'erp-hr-payroll:3204'
+        - 'erp-hr-performance:3205'
 
-  # Finance Services
+  # ── Finance Services ──────────────────────────────────────────────────────
   - job_name: 'finance-services'
     static_configs:
       - targets:
-        - 'finance-budget:3301'
-        - 'finance-reports:3302'
-        - 'finance-payments:3303'
-        - 'finance-expenses:3304'
-        - 'finance-invoices:3305'
+        - 'erp-finance-budget:3301'
+        - 'erp-finance-reports:3302'
+        - 'erp-finance-payments:3303'
+        - 'erp-finance-expenses:3304'
+        - 'erp-finance-invoices:3305'
 
-  # Operations Services
+  # ── Operations Services ───────────────────────────────────────────────────
   - job_name: 'operations-services'
     static_configs:
       - targets:
-        - 'ops-tasks:3401'
-        - 'ops-workflows:3402'
-        - 'ops-suppliers:3403'
-        - 'ops-projects:3404'
-        - 'ops-inventory:3405'
+        - 'erp-ops-tasks:3401'
+        - 'erp-ops-workflows:3402'
+        - 'erp-ops-suppliers:3403'
+        - 'erp-ops-projects:3404'
+        - 'erp-ops-inventory:3405'
 
-  # Infrastructure
-  - job_name: 'postgres'
+  # ── Chatbot Service ───────────────────────────────────────────────────────
+  - job_name: 'chatbot-service'
     static_configs:
-      - targets: ['postgres:5432']
+      - targets: ['erp-chatbot:3500']
 
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['redis:6379']
-
+  # ── Infrastructure ────────────────────────────────────────────────────────
   - job_name: 'rabbitmq'
     static_configs:
-      - targets: ['rabbitmq:15672']
+      - targets: ['erp-rabbitmq:15692']
