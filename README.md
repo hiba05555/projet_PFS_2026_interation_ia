@@ -64,3 +64,6 @@ curl http://localhost:3000/api/hr/employees \
 - Finance → finance/*
 - Operations → ops/*
 - employee → lecture + ses données
+=======
+# projet_PFS_2026_interation_ia
+>>>>>>> 7cf238c7abff048e14801f6b8486fa5144d0b81e
