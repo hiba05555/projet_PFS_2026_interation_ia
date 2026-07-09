@@ -43,6 +43,10 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10kb' }));
 
+// ─── Métriques Prometheus (endpoint non protégé — scrape sans authentification) ──
+const { metricsHandler } = require('./shared/middleware/metrics');
+app.get('/metrics', metricsHandler);
+
 // Rate limiting spécifique au login (anti brute-force)
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

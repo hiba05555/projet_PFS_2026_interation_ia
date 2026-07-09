@@ -12,6 +12,10 @@ const PORT = process.env.PORT || 3104;
 app.use(helmet());
 app.use(express.json({ limit: '10kb' }));
 
+// ─── Métriques Prometheus (endpoint non protégé — scrape sans authentification) ──
+const { metricsHandler } = require('./shared/middleware/metrics');
+app.get('/metrics', metricsHandler);
+
 const metricSchema = z.object({
   service_name: z.string().min(2).max(200),
   metric_type:  z.enum(['cpu','memory','disk','network','latency','error_rate','uptime','custom']),
@@ -55,8 +59,8 @@ app.get('/dashboard', verifyToken, requireDeptOrAdmin('IT'),
   })
 );
 
-// Métriques par service
-app.get('/metrics', verifyToken, requireDeptOrAdmin('IT'),
+// Métriques par service (métier — distinct de l'endpoint Prometheus /metrics)
+app.get('/monitoring/status', verifyToken, requireDeptOrAdmin('IT'),
   asyncHandler(async (req, res) => {
     const { page, limit, offset } = getPagination(req.query);
     const { service_name, metric_type, from, to } = req.query;
@@ -83,7 +87,7 @@ app.get('/metrics', verifyToken, requireDeptOrAdmin('IT'),
 );
 
 // Enregistrer une métrique (depuis les agents de monitoring)
-app.post('/metrics', verifyToken, requireDeptOrAdmin('IT'),
+app.post('/monitoring/status', verifyToken, requireDeptOrAdmin('IT'),
   asyncHandler(async (req, res) => {
     const data = metricSchema.parse(req.body);
 

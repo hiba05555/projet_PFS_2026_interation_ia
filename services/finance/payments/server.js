@@ -12,6 +12,10 @@ const PORT = process.env.PORT || 3303;
 app.use(helmet());
 app.use(express.json({ limit: '10kb' }));
 
+// ─── Métriques Prometheus (endpoint non protégé — scrape sans authentification) ──
+const { metricsHandler } = require('./shared/middleware/metrics');
+app.get('/metrics', metricsHandler);
+
 const paymentSchema = z.object({
   invoice_id:     z.string().uuid().optional(),
   payee_name:     z.string().min(2).max(200),

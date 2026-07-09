@@ -32,6 +32,10 @@ app.use(cors({
 
 app.use(express.json({ limit: '10kb' }));
 
+// ─── Métriques Prometheus (endpoint non protégé — scrape sans authentification) ──
+const { metricsHandler } = require('./shared/middleware/metrics');
+app.get('/metrics', metricsHandler);
+
 // ─── Rate Limiting global ──────────────────────────────────────────────────
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
@@ -124,7 +128,11 @@ app.post('/api/chatbot/chat', async (req, res) => {
   try {
     const response = await axios.post(`${CHATBOT_SERVICE_URL}/chat`, req.body, {
       headers: buildChatbotHeaders(req),
-      timeout: 120000 // 120 secondes timeout — modèle local CPU lent
+      // Doit rester strictement supérieur au pire cas côté chatbot-service : RAG + jusqu'à
+      // DEUX appels LLM séquentiels de 300s chacun (retry sans historique si la requête
+      // ressemble à une action mais que le 1er appel n'a produit aucun function-call valide,
+      // voir server.js) + exécution de fonction + sauvegarde.
+      timeout: 660000
     });
     res.json(response.data);
   } catch (error) {

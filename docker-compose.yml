@@ -498,7 +498,11 @@ services:
   
 
   chromadb:
-    image: chromadb/chroma:latest
+    # 0.4.22 est incompatible avec NumPy 2.0 (np.float_ supprimé) : le script de démarrage
+    # de cette image réinstalle systématiquement le dernier NumPy, ce qui provoque une
+    # boucle de crash au démarrage. Les clients utilisés (npm chromadb@^1.7.3, script
+    # Python vectorize_docs.py) ciblent de toute façon l'API ChromaDB >= 1.0.0.
+    image: chromadb/chroma:1.0.20
     container_name: erp-chromadb
     ports:
       - "8000:8000"
@@ -593,7 +597,7 @@ services:
       - erp-back-tier
     restart: unless-stopped
 
-  cadvisor:
+  caddvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: erp-cadvisor
     privileged: true
@@ -650,6 +654,21 @@ services:
     networks:
       - erp-back-tier
       - erp-front-tier
+    restart: unless-stopped
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.11.0
+    container_name: erp-filebeat
+    user: root
+    command: ["--strict.perms=false"]
+    volumes:
+      - ./monitoring/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - logstash
+    networks:
+      - erp-back-tier
     restart: unless-stopped
 
 

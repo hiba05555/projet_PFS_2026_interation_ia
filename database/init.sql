@@ -531,6 +531,27 @@ CREATE TABLE IF NOT EXISTS ops_schema.inventory_movements (
 );
 
 -- ==========================================
+-- CHATBOT (historique persistant, schéma public — chatbot-service/db.js interroge
+-- ces tables sans préfixe de schéma, donc elles doivent rester dans le search_path
+-- par défaut plutôt que dans un schéma dédié comme les domaines métier ci-dessus)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS chat_conversations (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     INTEGER      NOT NULL,
+    title       VARCHAR(255) DEFAULT 'Nouvelle conversation',
+    created_at  TIMESTAMP    DEFAULT NOW(),
+    updated_at  TIMESTAMP    DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID REFERENCES chat_conversations(id) ON DELETE CASCADE,
+    role            VARCHAR(20) NOT NULL,
+    content         TEXT        NOT NULL,
+    created_at      TIMESTAMP   DEFAULT NOW()
+);
+
+-- ==========================================
 -- INDEXES
 -- ==========================================
 CREATE INDEX IF NOT EXISTS idx_tickets_status       ON it_schema.helpdesk_tickets(status);
@@ -558,6 +579,9 @@ CREATE INDEX IF NOT EXISTS idx_projects_status      ON ops_schema.projects(statu
 CREATE INDEX IF NOT EXISTS idx_inventory_category   ON ops_schema.inventory(category);
 CREATE INDEX IF NOT EXISTS idx_suppliers_status     ON ops_schema.suppliers(status);
 
+CREATE INDEX IF NOT EXISTS idx_chat_conversations_user_id ON chat_conversations(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id);
+
 DO $$
 BEGIN
     RAISE NOTICE '✅ ERP DataProtect — schéma initialisé avec succès';
@@ -566,5 +590,6 @@ BEGIN
     RAISE NOTICE '   hr_schema    : 6 tables';
     RAISE NOTICE '   finance_schema: 5 tables';
     RAISE NOTICE '   ops_schema   : 8 tables';
-    RAISE NOTICE '   TOTAL        : 26 tables + indexes';
+    RAISE NOTICE '   public (chatbot) : 2 tables';
+    RAISE NOTICE '   TOTAL        : 28 tables + indexes';
 END $$;

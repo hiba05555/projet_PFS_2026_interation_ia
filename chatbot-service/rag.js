@@ -6,7 +6,7 @@
  * via ChromaDB (base vectorielle)
  */
 
-const { ChromaClient } = require('chromadb');
+const { ChromaClient, DefaultEmbeddingFunction } = require('chromadb');
 
 // Configuration
 const CHROMADB_URL = process.env.CHROMADB_URL || 'http://chromadb:8000';
@@ -24,8 +24,14 @@ async function initialize() {
     client = new ChromaClient({ path: CHROMADB_URL });
     
     // Récupérer la collection (doit exister - créée par vectorize_docs.py)
+    // embeddingFunction requis par le client JS >= 1.x pour vectoriser les queryTexts
+    // côté client (contrairement au client Python qui le fait implicitement) ; sans lui,
+    // collection.query() plante avec "Cannot read properties of undefined (reading 'generate')".
+    // DefaultEmbeddingFunction utilise le même modèle (all-MiniLM-L6-v2) que le défaut
+    // du client Python utilisé par vectorize_docs.py, donc les embeddings restent comparables.
     collection = await client.getCollection({
-      name: COLLECTION_NAME
+      name: COLLECTION_NAME,
+      embeddingFunction: new DefaultEmbeddingFunction()
     });
     
     console.log(`✅ RAG Client connected to ChromaDB: ${CHROMADB_URL}`);
@@ -54,9 +60,13 @@ async function searchRelevantDocs(query, nResults = 3) {
     }
 
     // Recherche sémantique
+    // On récupère plus de résultats que nécessaire (nResults + 5), puis on filtre
+    // les catégories "meta" (chatbot, devops, docker, monitoring, infrastructure, api)
+    // qui décrivent le fonctionnement interne du système et perturbent le function calling.
+    const EXCLUDED_CATEGORIES = ['chatbot', 'devops', 'docker', 'monitoring', 'infrastructure', 'api'];
     const results = await collection.query({
       queryTexts: [query],
-      nResults: nResults
+      nResults: nResults + 5
     });
 
     // Formater les résultats
@@ -74,9 +84,20 @@ async function searchRelevantDocs(query, nResults = 3) {
       }
     }
 
-    console.log(`RAG Search: "${query}" → ${docs.length} results`);
+    // Filtrer les catégories meta ET les documents hors-sujet APRÈS la recherche, puis
+    // tronquer au nombre demandé. Seuil calibré empiriquement (embeddings DefaultEmbeddingFunction,
+    // 35 docs erp_documentation.json) : les docs réellement pertinents pour une question ERP
+    // tombent à une distance ~0.90-1.0, tandis qu'une requête sans rapport (ex. "bonjour")
+    // ne descend jamais sous ~1.6. 1.1 sépare proprement les deux sans exclure de vrais résultats.
+    const MAX_DISTANCE = 1.1;
+    const filteredDocs = docs
+      .filter(doc => !EXCLUDED_CATEGORIES.includes(doc.category))
+      .filter(doc => doc.distance === null || doc.distance <= MAX_DISTANCE)
+      .slice(0, nResults);
+
+    console.log(`RAG Search: "${query}" → ${filteredDocs.length} results (${docs.length} avant filtrage)`);
     
-    return docs;
+    return filteredDocs;
 
   } catch (error) {
     console.error(`RAG search error: ${error.message}`);

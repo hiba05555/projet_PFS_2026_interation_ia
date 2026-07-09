@@ -20,8 +20,12 @@ PARAMETER top_p 0.95
 PARAMETER top_k 40
 PARAMETER repeat_penalty 1.1
 
-# Fenetre de contexte : 2048 tokens — reduit l'empreinte memoire (16 GB RAM)
-PARAMETER num_ctx 2048
+# Fenetre de contexte : 4096 tokens. 2048 etait insuffisant : le prompt (RAG + instructions
+# function-calling) atteint a lui seul ~1800 tokens en pratique, ne laissant presque plus de
+# place pour la reponse et provoquant des generations tronquees/incoherentes. Valeur par
+# defaut du Modelfile ; ollama.js la retransmet aussi explicitement a chaque appel /api/generate
+# (num_ctx cote requete), qui prevaut de toute facon sur celle-ci.
+PARAMETER num_ctx 4096
 
 # Tokens d'arret pour eviter les hallucinations de tour suivant
 PARAMETER stop "### Instruction:"

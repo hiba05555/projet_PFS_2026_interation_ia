@@ -1,0 +1,22 @@
+# Filebeat — collecte des logs de tous les containers Docker (stdout/stderr)
+# et transmission vers Logstash (input beats, port 5044) pour indexation Elasticsearch.
+
+filebeat.inputs:
+  - type: container
+    paths:
+      - '/var/lib/docker/containers/*/*.log'
+    processors:
+      - add_docker_metadata:
+          host: "unix:///var/run/docker.sock"
+
+processors:
+  - add_fields:
+      target: ''
+      fields:
+        application: erp-dataprotect
+
+output.logstash:
+  hosts: ["logstash:5044"]
+
+logging.level: info
+logging.to_stderr: true

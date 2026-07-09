@@ -1,9 +1,8 @@
 # ============================================================================
 # CELLULE 1 — Installation Unsloth
 # ============================================================================
-!pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
+# !pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
 print("✅ Unsloth installé!")
-
 
 # ============================================================================
 # CELLULE 2 — Imports & Setup

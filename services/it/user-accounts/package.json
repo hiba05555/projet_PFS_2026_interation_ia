@@ -2,15 +2,18 @@
   "name": "erp-it-user-accounts",
   "version": "1.0.0",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
-    "express": "^4.18.0",
-    "cors": "^2.8.5",
-    "pg": "^8.11.0",
     "bcrypt": "^5.1.0",
-    "jsonwebtoken": "^9.0.0",
-    "helmet": "^7.1.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.3.0",
+    "express": "^4.18.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.0",
+    "pg": "^8.11.0",
+    "prom-client": "^15.1.3",
     "zod": "^3.22.0"
   }
 }

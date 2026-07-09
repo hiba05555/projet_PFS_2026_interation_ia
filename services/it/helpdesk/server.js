@@ -12,6 +12,10 @@ const PORT = process.env.PORT || 3101;
 app.use(helmet());
 app.use(express.json({ limit: '10kb' }));
 
+// ─── Métriques Prometheus (endpoint non protégé — scrape sans authentification) ──
+const { metricsHandler } = require('./shared/middleware/metrics');
+app.get('/metrics', metricsHandler);
+
 // ─── RBAC : filtre SQL par rôle ───────────────────────────────────────────────
 // Mute conds[] et params[] pour restreindre la visibilité des lignes.
 // Appeler AVANT d'ajouter limit/offset dans params.

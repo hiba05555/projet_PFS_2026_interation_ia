@@ -3,7 +3,7 @@
     "id": "overview_001",
     "category": "overview",
     "title": "Architecture ERP DATAPROTECT",
-    "content": "La plateforme ERP DATAPROTECT est organisée en architecture microservices avec 22 services répartis sur 4 domaines métiers: IT (Infrastructure & Support), HR (Ressources Humaines), Finance (Comptabilité & Budget), et Operations (Coordination Opérationnelle). Chaque domaine possède son propre schéma PostgreSQL isolé, ses mécanismes de cache Redis, et communique via RabbitMQ pour les événements asynchrones. L'API Gateway centralisée sur le port 3000 gère l'authentification JWT et route les requêtes vers les microservices appropriés."
+    "content": "La plateforme ERP DATAPROTECT est organisée en architecture microservices avec 20 microservices métier répartis sur 4 domaines: IT (Infrastructure & Support), HR (Ressources Humaines), Finance (Comptabilité & Budget), et Operations (Coordination Opérationnelle) — 5 services chacun — plus un service d'authentification dédié, une API Gateway et un service Chatbot. Chaque domaine métier possède son propre schéma PostgreSQL isolé (it_schema, hr_schema, finance_schema, ops_schema), auquel s'ajoute un schéma auth_schema pour l'authentification. Un conteneur RabbitMQ est provisionné dans l'infrastructure Docker mais n'est actuellement intégré par aucun microservice (pas de publication/consommation d'événements asynchrones dans le code). L'API Gateway centralisée sur le port 3000 vérifie le JWT et route les requêtes vers les microservices appropriés."
   },
   {
     "id": "it_helpdesk_001",
@@ -15,7 +15,7 @@
     "id": "it_helpdesk_002",
     "category": "it",
     "title": "Helpdesk Service - API Endpoints",
-    "content": "Endpoints disponibles: POST /api/helpdesk/tickets (créer ticket - champs requis: title, description, priority, category), GET /api/helpdesk/tickets (lister tickets - filtres: status, priority, assignedTo, category, createdAfter, createdBefore), GET /api/helpdesk/tickets/{id} (détails ticket), PATCH /api/helpdesk/tickets/{id} (modifier ticket - champs: status, priority, assignedTo, resolution), DELETE /api/helpdesk/tickets/{id} (supprimer ticket - admin uniquement), POST /api/helpdesk/tickets/{id}/comments (ajouter commentaire)."
+    "content": "Endpoints disponibles (préfixe gateway /api/it/helpdesk): POST /api/it/helpdesk/tickets (créer ticket - champs requis: title, description, priority, category), GET /api/it/helpdesk/tickets (lister tickets - filtres: status, priority, assignedTo, category, createdAfter, createdBefore), GET /api/it/helpdesk/tickets/{id} (détails ticket), PATCH /api/it/helpdesk/tickets/{id} (modifier ticket - champs: status, priority, assignedTo, resolution), DELETE /api/it/helpdesk/tickets/{id} (supprimer ticket - admin uniquement), POST /api/it/helpdesk/tickets/{id}/comments (ajouter commentaire)."
   },
   {
     "id": "it_helpdesk_003",
@@ -33,7 +33,7 @@
     "id": "it_accounts_002",
     "category": "it",
     "title": "User Accounts Service - API Endpoints",
-    "content": "Endpoints: POST /api/accounts/users (créer utilisateur - champs: email unique, firstName, lastName, department, role), GET /api/accounts/users (lister utilisateurs - filtres: department, role, status), GET /api/accounts/users/{id} (détails utilisateur), PATCH /api/accounts/users/{id} (modifier - champs: firstName, lastName, department, role, status), POST /api/accounts/users/reset-password (réinitialiser mot de passe), POST /api/accounts/users/{id}/deactivate (désactiver compte)."
+    "content": "Endpoints (préfixe gateway /api/it/user-accounts): POST /api/it/user-accounts/users (créer utilisateur - champs: email unique, firstName, lastName, department, role), GET /api/it/user-accounts/users (lister utilisateurs - filtres: department, role, status), GET /api/it/user-accounts/users/{id} (détails utilisateur), PATCH /api/it/user-accounts/users/{id} (modifier - champs: firstName, lastName, department, role, status), POST /api/it/user-accounts/users/reset-password (réinitialiser mot de passe), POST /api/it/user-accounts/users/{id}/deactivate (désactiver compte)."
   },
   {
     "id": "it_equipment_001",
@@ -57,13 +57,13 @@
     "id": "hr_leave_001",
     "category": "hr",
     "title": "Leave Requests Service - Gestion des congés",
-    "content": "Le Leave Requests Service (port 3202) gère le workflow complet des demandes de congés: soumission par l'employé, validation par le manager, mise à jour automatique des soldes, notifications par email. Types de congés supportés: paid_leave (congés payés), sick_leave (arrêt maladie), unpaid_leave (congé sans solde), parental_leave (congé parental). Le solde annuel se réinitialise automatiquement le 1er janvier."
+    "content": "Le Leave Requests Service (port 3202) gère le workflow des demandes de congés: soumission par l'employé, validation par le département RH (pas par le manager direct), annulation possible tant que la demande est en attente. Types de congés réellement supportés (enum leave_type): annual, sick, maternity, paternity, unpaid, other. Le service vérifie qu'il n'existe pas déjà une demande chevauchant les mêmes dates pour l'employé, mais ne gère aucun solde de congés: pas de table ni de logique de balance/quota, pas de réinitialisation annuelle au 1er janvier, et pas de notification par email — ces éléments ne sont pas implémentés dans le code actuel."
   },
   {
     "id": "hr_leave_002",
     "category": "hr",
     "title": "Leave Requests Service - API Endpoints",
-    "content": "Endpoints: POST /api/hr/leave-requests (créer demande - champs: type, startDate, endDate, reason optionnel - vérifie solde automatiquement), GET /api/hr/leave-requests (lister - filtres: status, type, employee), GET /api/hr/leave-requests/balance (consulter solde personnel: total, utilisé, restant, en attente), POST /api/hr/leave-requests/{id}/approve (manager approuve), POST /api/hr/leave-requests/{id}/reject (manager refuse avec commentaire obligatoire), GET /api/hr/leave-requests/team (manager voit équipe)."
+    "content": "Endpoints réels (préfixe gateway /api/hr/leave): POST /api/hr/leave (soumettre une demande - champs: employee_id, leave_type, start_date, end_date, reason optionnel), GET /api/hr/leave (lister toutes les demandes - HR/admin uniquement - filtres: status, leave_type, employee_id), GET /api/hr/leave/my-requests (mes propres demandes, filtre optionnel status), GET /api/hr/leave/{id} (détails - visible par HR/admin ou par l'employé concerné), PATCH /api/hr/leave/{id}/approve (HR/admin approuve, uniquement si status=pending), PATCH /api/hr/leave/{id}/reject (HR/admin refuse - champ reason optionnel, PAS obligatoire), PATCH /api/hr/leave/{id}/cancel (l'employé ou HR/admin annule une demande encore en attente). Il n'existe PAS d'endpoint /balance ni /team."
   },
   {
     "id": "hr_payroll_001",
@@ -75,13 +75,13 @@
     "id": "finance_budget_001",
     "category": "finance",
     "title": "Budget Service - Gestion budgétaire",
-    "content": "Le Budget Service (port 3301) permet la création et le suivi des budgets annuels par département et par catégorie (personnel, équipement, logiciels, formation, autres). Chaque budget possède un montant alloué, un montant dépensé (calculé automatiquement depuis les expenses et invoices), et un montant restant. Le système génère des alertes automatiques à 80% et 95% de consommation budgétaire et fournit des prévisions de fin d'année."
+    "content": "Le Budget Service (port 3301) permet de créer, lister, mettre à jour et archiver des budgets (champs: name, description, amount, currency, category, fiscal_year, start_date, end_date, status). Chaque budget est un enregistrement avec un seul montant (amount): il n'y a pas de calcul automatique de montant dépensé/restant depuis les expenses ou invoices, pas de génération d'alertes à 80%/95% de consommation, et pas d'endpoint de prévision de fin d'année — ces fonctionnalités ne sont pas implémentées dans le code actuel. La suppression (DELETE) est un soft-delete qui passe le statut à 'archived'."
   },
   {
     "id": "finance_budget_002",
     "category": "finance",
     "title": "Budget Service - API Endpoints",
-    "content": "Endpoints: POST /api/finance/budgets (créer budget - champs: year, department, categories avec allocatedAmount par catégorie), GET /api/finance/budgets (lister - filtres: year, department, status), GET /api/finance/budgets/{id} (détails budget), GET /api/finance/budgets/{id}/status (état exécution: alloué, dépensé, restant, taux %), PATCH /api/finance/budgets/{id} (modifier allocations), GET /api/finance/budgets/forecast (prévisions fin année)."
+    "content": "Endpoints réels (préfixe gateway /api/finance/budget, singulier): POST /api/finance/budget (créer - champs: name, description, amount, currency, category, fiscal_year, start_date, end_date - accès Finance/admin), GET /api/finance/budget (lister, paginé - accès Finance/admin), GET /api/finance/budget/{id} (détails), PATCH /api/finance/budget/{id} (mise à jour partielle des champs), DELETE /api/finance/budget/{id} (soft-delete, passe status à 'archived'). Il n'existe PAS d'endpoint /status ni /forecast."
   },
   {
     "id": "finance_expenses_001",
@@ -117,7 +117,7 @@
     "id": "ops_tasks_002",
     "category": "operations",
     "title": "Tasks Service - API Endpoints",
-    "content": "Endpoints: POST /api/operations/tasks (créer tâche - champs: title, description, assignedTo, dueDate, priority, project optionnel, tags array), GET /api/operations/tasks (lister - filtres: assignedTo, status, priority, project, dueDate), GET /api/operations/tasks/{id} (détails avec commentaires), PATCH /api/operations/tasks/{id} (modifier), POST /api/operations/tasks/{id}/complete (marquer terminée avec timeSpent en minutes), POST /api/operations/tasks/{id}/comments (ajouter commentaire)."
+    "content": "Endpoints (préfixe gateway réel /api/ops/tasks, pas /api/operations/tasks): POST /api/ops/tasks (créer tâche - champs: title, description, assignedTo, dueDate, priority, project optionnel, tags array), GET /api/ops/tasks (lister - filtres: assignedTo, status, priority, project, dueDate), GET /api/ops/tasks/{id} (détails avec commentaires), PATCH /api/ops/tasks/{id} (modifier), POST /api/ops/tasks/{id}/complete (marquer terminée avec timeSpent en minutes), POST /api/ops/tasks/{id}/comments (ajouter commentaire)."
   },
   {
     "id": "ops_projects_001",
@@ -129,7 +129,7 @@
     "id": "ops_projects_002",
     "category": "operations",
     "title": "Projects Service - API Endpoints",
-    "content": "Endpoints: POST /api/operations/projects (créer projet - champs: name, description, startDate, endDate, budget, manager, team array userIds, milestones array), GET /api/operations/projects (lister - filtres: status, manager, dateFrom), GET /api/operations/projects/{id} (détails complets), GET /api/operations/projects/{id}/progress (avancement: tâches total/complétées, budget consommé/restant, milestones, santé), PATCH /api/operations/projects/{id} (modifier), POST /api/operations/projects/{id}/risks (ajouter risque)."
+    "content": "Endpoints (préfixe gateway réel /api/ops/projects, pas /api/operations/projects): POST /api/ops/projects (créer projet - champs: name, description, startDate, endDate, budget, manager, team array userIds, milestones array), GET /api/ops/projects (lister - filtres: status, manager, dateFrom), GET /api/ops/projects/{id} (détails complets), GET /api/ops/projects/{id}/progress (avancement: tâches total/complétées, budget consommé/restant, milestones, santé), PATCH /api/ops/projects/{id} (modifier), POST /api/ops/projects/{id}/risks (ajouter risque)."
   },
   {
     "id": "ops_suppliers_001",
@@ -141,43 +141,43 @@
     "id": "ops_suppliers_002",
     "category": "operations",
     "title": "Suppliers Service - API Endpoints",
-    "content": "Endpoints: POST /api/operations/suppliers (créer fournisseur - champs: name, category, contactEmail, contactPhone, address, paymentTerms, taxId), GET /api/operations/suppliers (lister - filtres: category, active), GET /api/operations/suppliers/{id} (détails avec historique commandes), PATCH /api/operations/suppliers/{id} (modifier), POST /api/operations/suppliers/{id}/evaluate (évaluer - rating 1-5, deliveryTime 1-5, quality 1-5, communication 1-5, comments), POST /api/operations/suppliers/{id}/deactivate."
+    "content": "Endpoints (préfixe gateway réel /api/ops/suppliers, pas /api/operations/suppliers): POST /api/ops/suppliers (créer fournisseur - champs: name, category, contactEmail, contactPhone, address, paymentTerms, taxId), GET /api/ops/suppliers (lister - filtres: category, active), GET /api/ops/suppliers/{id} (détails avec historique commandes), PATCH /api/ops/suppliers/{id} (modifier), POST /api/ops/suppliers/{id}/evaluate (évaluer - rating 1-5, deliveryTime 1-5, quality 1-5, communication 1-5, comments), POST /api/ops/suppliers/{id}/deactivate."
   },
   {
     "id": "auth_001",
     "category": "authentication",
     "title": "Authentification JWT - Flux complet",
-    "content": "L'authentification utilise un système de double token JWT: access token (durée 15 minutes, contient userId, role, department) et refresh token (durée 7 jours, stocké dans Redis pour révocation). Flux: 1) POST /login avec email/password, 2) vérification bcrypt, 3) génération des 2 tokens, 4) stockage refresh token dans Redis, 5) retour des tokens au client. Pour les requêtes suivantes, le client inclut l'access token dans l'en-tête Authorization: Bearer {token}. Si l'access token expire, le client utilise le refresh token pour obtenir une nouvelle paire sans re-saisir les credentials."
+    "content": "L'authentification utilise un JWT unique, sans refresh token. Flux: 1) POST /api/auth/login avec email/password, 2) vérification bcrypt (délai constant même si l'utilisateur n'existe pas, pour éviter le timing attack), 3) génération d'un seul token JWT contenant {id, role, department, email} avec une durée de validité de 8 heures (expiresIn: '8h'), 4) retour du token au client. Pour les requêtes suivantes, le client inclut ce token dans l'en-tête Authorization: Bearer {token}. Il n'existe ni refresh token, ni stockage Redis du token, ni mécanisme de révocation: un token émis reste valide jusqu'à son expiration naturelle (8h), même si le compte est désactivé entre-temps. Quand le token expire, l'utilisateur doit simplement se reconnecter avec ses identifiants."
   },
   {
     "id": "auth_002",
     "category": "authentication",
     "title": "Modèle RBAC - Rôles et permissions",
-    "content": "5 rôles disponibles: Admin (accès lecture/écriture tous domaines), Manager (lecture/écriture son domaine, lecture autres), Employee (lecture seul, self uniquement pour HR/Finance), HR (accès complet domaine HR), Finance (accès complet domaine Finance). Les permissions sont vérifiées par un middleware qui extrait le rôle depuis les claims JWT et vérifie l'accès à la ressource demandée. Permissions granulaires: self (ses propres données), team (son équipe), department (son département), global (tout le système)."
+    "content": "Le RBAC réel repose sur 2 dimensions indépendantes portées par le JWT: le rôle (role: admin, manager, ou employee — seules valeurs acceptées par le schéma de validation à l'inscription/création) et le département (department: chaîne libre, ex. HR, Finance, IT, Operations). Le rôle admin a accès à tout. Pour les autres rôles, l'accès à un domaine métier est vérifié par le middleware requireDeptOrAdmin(...départements), qui autorise soit les admins, soit les utilisateurs dont req.user.department correspond au département requis — indépendamment du rôle (manager ou employee). Il n'existe pas de rôle 'HR' ou 'Finance' au sens strict: ce sont des valeurs de département, pas des rôles."
   },
   {
     "id": "infra_001",
     "category": "infrastructure",
     "title": "PostgreSQL - Organisation des schémas",
-    "content": "PostgreSQL 15 avec 4 schémas isolés par domaine: schema IT (tables: tickets, user_accounts, equipment, monitoring_alerts, licenses), schema HR (tables: employees, leave_requests, recruitment, payroll, performance_reviews), schema Finance (tables: budgets, expenses, invoices, payments, reports), schema Operations (tables: tasks, workflows, suppliers, projects, inventory). Chaque schéma possède ses propres indexes, contraintes FK internes, et stratégies de backup. Connexion via pool de connexions (pg-pool) pour performance."
+    "content": "PostgreSQL 15 avec 5 schémas isolés (database/init.sql): auth_schema (authentification et comptes), it_schema (tickets, user_accounts, equipment, monitoring_alerts, licenses), hr_schema (employees, leave_requests, recruitment, payroll, performance_reviews), finance_schema (budgets, expenses, invoices, payments, reports), ops_schema (tasks, workflows, suppliers, projects, inventory). Connexion via pool de connexions (pg Pool) pour chaque microservice."
   },
   {
     "id": "infra_002",
     "category": "infrastructure",
     "title": "Redis - Usages et patterns",
-    "content": "Redis 7 utilisé pour: 1) Cache des requêtes fréquentes (profils utilisateurs, configurations) avec TTL 15 minutes, pattern cache-aside, 2) Sessions utilisateurs avec TTL aligné sur refresh token (7 jours), 3) Refresh tokens JWT pour révocation, 4) Rate limiting avec compteurs INCR et EXPIRE, 5) Contexte conversationnel du chatbot avec historique 10 derniers messages, 6) Pub/Sub pour notifications temps réel entre services. Structure clés: cache:{type}:{id}, session:{userId}, token:{refreshToken}, ratelimit:{userId}:{endpoint}, chat:context:{conversationId}."
+    "content": "Redis 7 est utilisé uniquement pour le contexte conversationnel du chatbot (chatbot-service/context.js): historique des 10 derniers messages par conversation, stocké en liste Redis (lPush/lTrim) sous la clé chat:context:{conversationId}, avec un TTL de 7 jours. Aucun autre usage de Redis n'est implémenté actuellement: pas de cache applicatif (profils, configurations), pas de stockage de sessions utilisateur, pas de refresh token JWT (voir auth_001), et pas de rate limiting basé sur Redis — le rate limiting (API Gateway et service Auth) utilise express-rate-limit avec un store en mémoire, propre à chaque instance."
   },
   {
     "id": "infra_003",
     "category": "infrastructure",
     "title": "RabbitMQ - Événements asynchrones",
-    "content": "RabbitMQ 3 avec AMQP 0.9.1 pour communication asynchrone. Exchanges par domaine: exchange.it, exchange.hr, exchange.finance, exchange.operations. Routing keys format: {domain}.{service}.{event} (ex: hr.employees.created, finance.invoice.paid). Work queues pour distribution de charge, Dead Letter Exchange pour messages en échec après 3 retry avec exponential backoff. Événements publiés: employee.created, leave.approved, ticket.created, invoice.paid, project.milestone, task.assigned. Consumers dans chaque service intéressé."
+    "content": "Un conteneur RabbitMQ (image rabbitmq:3-management-alpine) est déclaré dans docker-compose.yml et démarre dans l'infrastructure, mais aucun microservice du code actuel ne s'y connecte: il n'y a ni bibliothèque amqp/amqplib installée, ni exchange, ni queue, ni consumer implémentés dans le code. La communication entre microservices se fait exclusivement de façon synchrone via des appels HTTP à travers l'API Gateway (reverse proxy Express). Il n'existe donc aujourd'hui aucune communication événementielle asynchrone dans l'application."
   },
   {
     "id": "api_001",
     "category": "api",
     "title": "API Gateway - Routage et sécurité",
-    "content": "API Gateway Express.js sur port 3000 agit comme point d'entrée unique. Middleware chain: 1) CORS avec whitelist, 2) Helmet pour headers sécurité, 3) Rate limiting (100 req/min par IP, 500 req/min par user authentifié), 4) JWT validation (sauf /login et /health), 5) Extraction claims JWT, 6) Routage vers microservice via HTTP proxy. Routes: /api/helpdesk/* → :3101, /api/accounts/* → :3102, /api/hr/* → :3201-3205, /api/finance/* → :3301-3305, /api/operations/* → :3401-3405, /api/chatbot/* → :3500."
+    "content": "API Gateway Express.js (services/api-gateway/server.js) sur port 3000 agit comme point d'entrée unique. Middleware chain réelle: 1) Helmet pour headers sécurité, 2) CORS avec whitelist d'origines (ALLOWED_ORIGINS), 3) rate limiting global unique via express-rate-limit: 300 requêtes / 15 minutes par IP (pas de distinction IP/utilisateur authentifié, pas de paliers 100/500 req·min), 4) toutes les routes /api/auth/* (login, register, reset-password...) sont proxy-ées vers le service Auth SANS vérification JWT, 5) pour toute autre route /api/*, le middleware verifyToken exige un JWT valide, 6) le JWT est remplacé par un header interne X-User-Context avant transmission au microservice (l'en-tête Authorization d'origine est supprimé). Table de routage réelle (avec préfixe de domaine): /api/it/helpdesk → :3101, /api/it/user-accounts → :3102, /api/it/equipment → :3103, /api/it/monitoring → :3104, /api/it/licenses → :3105, /api/hr/employees → :3201, /api/hr/leave → :3202, /api/hr/recruitment → :3203, /api/hr/payroll → :3204, /api/hr/performance → :3205, /api/finance/budget → :3301, /api/finance/reports → :3302, /api/finance/payments → :3303, /api/finance/expenses → :3304, /api/finance/invoices → :3305, /api/ops/tasks → :3401, /api/ops/workflows → :3402, /api/ops/suppliers → :3403, /api/ops/projects → :3404, /api/ops/inventory → :3405, /api/chatbot/* → routes dédiées vers le service chatbot (port 3500: /chat, /reset, /health, /history/:userId)."
   },
   {
     "id": "chatbot_001",
@@ -189,7 +189,7 @@
     "id": "chatbot_002",
     "category": "chatbot",
     "title": "Chatbot - Function Calling",
-    "content": "Le modèle fine-tuné peut générer des function calls au format JSON: {\"function\": \"create_ticket\", \"parameters\": {\"title\": \"...\", \"priority\": \"high\"}}. Functions disponibles: create_ticket, get_tickets, get_leave_balance, submit_leave_request, submit_expense, get_budget_status, create_task, get_project_progress, list_suppliers. Le service parse le JSON, valide les paramètres, construit la requête HTTP vers le microservice approprié, et inclut le JWT de l'utilisateur pour authentification."
+    "content": "Le modèle fine-tuné peut générer des function calls au format JSON: {\"function\": \"create_ticket\", \"parameters\": {\"title\": \"...\", \"priority\": \"high\"}}. Functions réellement définies dans FUNCTION_MAP (chatbot-service/functions.js): create_ticket (POST /api/it/helpdesk/tickets), get_tickets (GET /api/it/helpdesk/tickets), get_ticket (GET /api/it/helpdesk/tickets/:id), get_leave_balance (GET /api/hr/leave/balance), submit_leave_request (POST /api/hr/leave), get_leave_requests (GET /api/hr/leave), submit_expense (POST /api/finance/expenses), get_expenses (GET /api/finance/expenses), get_budget_status (GET /api/finance/budget/:id/status), create_task (POST /api/ops/tasks), get_tasks (GET /api/ops/tasks), get_project_progress (GET /api/ops/projects/:id/progress). Il n'existe PAS de fonction list_suppliers. Attention: get_leave_balance et get_budget_status pointent vers des endpoints (/balance, /:id/status) qui n'existent pas dans les microservices leave-requests et budget actuels — ces deux function calls échouent en pratique (404) tant que ces routes ne sont pas ajoutées côté backend. Le service vérifie que la fonction existe dans FUNCTION_MAP, construit la requête HTTP vers le microservice via l'API Gateway, et transmet le JWT de l'utilisateur pour authentification."
   },
   {
     "id": "devops_001",
@@ -201,7 +201,7 @@
     "id": "docker_001",
     "category": "docker",
     "title": "Docker Compose - Services",
-    "content": "docker-compose.yml définit 27 containers: 1 API Gateway, 1 Auth Service, 5 services IT, 5 services HR, 5 services Finance, 5 services Operations, 1 Chatbot, 1 PostgreSQL, 1 Redis, 1 RabbitMQ, 1 Ollama, 1 ChromaDB, 1 Prometheus, 1 Grafana, 1 Elasticsearch. Réseau Docker isolé permet communication inter-services par nom de service. Volumes persistants pour PostgreSQL data, Redis data, Ollama models, ChromaDB vectors. Health checks configurés pour chaque service. Environment variables dans .env pour configuration (ports, credentials, secrets)."
+    "content": "docker-compose.yml définit 36 services: nginx (reverse proxy, port 80), 1 API Gateway, 1 Auth Service, 5 services IT, 5 services HR, 5 services Finance, 5 services Operations, 1 Chatbot, 1 PostgreSQL, 1 Redis, 1 RabbitMQ (provisionné mais non intégré au code, voir infra_003), 1 Ollama, 1 ChromaDB, 1 Prometheus, 1 Grafana, 1 cAdvisor, 1 Elasticsearch, 1 Logstash, 1 Kibana, 1 Filebeat. Réseau Docker isolé (erp-front-tier / erp-back-tier) permet la communication inter-services par nom de service. Volumes persistants pour PostgreSQL, Grafana, ChromaDB, Ollama, Prometheus, Elasticsearch. Variables d'environnement dans .env pour la configuration (ports, credentials, secrets)."
   },
   {
     "id": "monitoring_001",
