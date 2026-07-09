@@ -21,11 +21,16 @@ export default function ChatWidget() {
       const userId = userStr ? JSON.parse(userStr).id : 'anonymous';
       const res = await axios.post(`${API_URL}/api/chatbot/chat`,
         { query: q, userId, conversationId, userToken: token },
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          // > timeout nginx/vite (720s) : jusqu'à 2 appels LLM séquentiels en cas de retry
+          timeout: 720000,
+        }
       );
       setMessages(prev => [...prev, { role: 'assistant', content: res.data.response }]);
       if (!conversationId) setConversationId(res.data.conversationId);
-    } catch {
+    } catch (err) {
+      console.error('Chatbot request failed:', err);
       setMessages(prev => [...prev, { role: 'assistant', content: 'Erreur de connexion.' }]);
     }
     setLoading(false);
