@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(docker-compose up:*)",
-      "Bash(curl -s -X POST http://localhost:3001/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@erp.com\",\"password\":\"admin123\"}')",
-      "Bash(node -e 'const bcrypt = require\\('\\\\''bcrypt'\\\\''\\); bcrypt.compare\\('\\\\''admin123'\\\\'', '\\\\''$2b$10$SHVr/xTMAGViFVeXoSNsFOWybJCuMjgf.CcWlFmhDiVicVxbEB2DW'\\\\''\\).then\\(r => console.log\\('\\\\''match:'\\\\'', r\\)\\);')"
-    ]
-  }
-}
